@@ -1,0 +1,112 @@
+/* ======================================================================================
+   قالب أسلوب التنسيق لمركز الأحمدي للجوالات - Alahmadi 'Geometric Balance' Theme CSS
+   ======================================================================================
+   المظهر البصري: Geometric Balance (توازن هندسي مريح مع تباين ألوان ذكي)
+   الألوان الأساسية: خلفية أخضر مزرق داكن (Dark Teal)، لمسات ذهبية صفراء (Golden Yellow)
+   الخط الأساسي: IBM Plex Sans Arabic (عربي RTL متكامل ومثالي للقراءة والشاشات)
+   ====================================================================================== */
+
+/* 1. استيراد الخطوط الرسمية من Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+/* 2. توجيهات Tailwind الأساسية */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ضبط اتجاه الصفحة والخطوط والخلفيات الافتراضية بأسلوب Geometric Balance */
+  html {
+    direction: rtl;
+    text-align: right;
+    font-family: 'IBM Plex Sans Arabic', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-alahmadi-teal-dark text-white min-h-screen selection:bg-alahmadi-gold selection:text-alahmadi-teal-dark;
+  }
+
+  /* تخصيص أشرطة التمرير لتتناسب مع ألوان مركز الأحمدي الداكنة */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-alahmadi-teal-dark;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-alahmadi-teal-light rounded-full hover:bg-alahmadi-gold;
+  }
+}
+
+@layer components {
+  /* بطاقات التصميم الهندسي المتزن */
+  .geometric-card {
+    @apply bg-alahmadi-teal-medium border border-white/5 rounded-geometric p-5 shadow-teal-depth transition-all duration-300 hover:border-alahmadi-gold/20 hover:shadow-gold-glow;
+  }
+
+  .geometric-card-elevated {
+    @apply bg-alahmadi-teal-card border border-white/10 rounded-geometric-lg p-6 shadow-teal-depth transition-all duration-300 hover:border-alahmadi-gold/30;
+  }
+
+  /* أزرار مخصصة متناسقة الأبعاد وسهلة اللمس (Touch Targets >= 48px) */
+  .btn-gold {
+    @apply bg-alahmadi-gold text-alahmadi-teal-dark font-bold text-sm px-6 py-3.5 rounded-geometric min-h-[48px] inline-flex items-center justify-center transition-all duration-200 hover:bg-alahmadi-gold-light active:scale-[0.98] focus:ring-2 focus:ring-alahmadi-gold/40 focus:outline-none;
+  }
+
+  .btn-teal {
+    @apply bg-alahmadi-teal-light text-white font-bold text-sm px-6 py-3.5 rounded-geometric min-h-[48px] inline-flex items-center justify-center border border-white/10 transition-all duration-200 hover:bg-alahmadi-teal-card active:scale-[0.98] focus:ring-2 focus:ring-alahmadi-teal-light/40 focus:outline-none;
+  }
+
+  .btn-danger-outline {
+    @apply bg-transparent text-alahmadi-alert-error border border-alahmadi-alert-error/50 font-bold text-sm px-6 py-3.5 rounded-geometric min-h-[48px] inline-flex items-center justify-center transition-all duration-200 hover:bg-alahmadi-alert-error/10 active:scale-[0.98] focus:ring-2 focus:ring-alahmadi-alert-error/20 focus:outline-none;
+  }
+
+  /* حقول مدخلات مع تباين ألوان RTL مريح للعين */
+  .input-geometric {
+    @apply bg-alahmadi-teal-card text-white placeholder:text-alahmadi-text-gray/50 text-sm px-4 py-3.5 rounded-geometric border border-white/10 w-full transition-all duration-200 focus:border-alahmadi-gold focus:ring-1 focus:ring-alahmadi-gold focus:outline-none;
+  }
+
+  /* بادجات الحالات الخاصة بالطلبات والتتبع */
+  .badge-new {
+    @apply bg-alahmadi-teal-light text-white text-xs px-3 py-1.5 rounded-full font-medium inline-block;
+  }
+  
+  .badge-success {
+    @apply bg-alahmadi-alert-success/15 text-alahmadi-alert-success text-xs px-3 py-1.5 rounded-full font-medium inline-block border border-alahmadi-alert-success/20;
+  }
+
+  .badge-warning {
+    @apply bg-alahmadi-alert-warning/15 text-alahmadi-alert-warning text-xs px-3 py-1.5 rounded-full font-medium inline-block border border-alahmadi-alert-warning/20;
+  }
+
+  .badge-info {
+    @apply bg-alahmadi-alert-info/15 text-alahmadi-alert-info text-xs px-3 py-1.5 rounded-full font-medium inline-block border border-alahmadi-alert-info/20;
+  }
+
+  .badge-error {
+    @apply bg-alahmadi-alert-error/15 text-alahmadi-alert-error text-xs px-3 py-1.5 rounded-full font-medium inline-block border border-alahmadi-alert-error/20;
+  }
+}
+
+/* 3. تأثيرات بصرية حركية وحميمة للمتجر */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* سكيلتون الهيكل التحميلي (Shimmering Skeleton Loader) */
+.shimmer-loader {
+  background: linear-gradient(90deg, #0e3841 25%, #134e5a 50%, #0e3841 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}

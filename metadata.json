@@ -1,0 +1,6 @@
+{
+  "name": "مركز الأحمدي للجوالات",
+  "description": "منصة تجارة إلكترونية متكاملة لمركز الأحمدي للجوالات ومستلزماتها، تطبيق عميل، لوحة إدارة، وتوصيل المناديب",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,7 +77,13 @@ fun StoreAppContent(viewModel: StoreViewModel) {
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = {
-                    fadeIn() togetherWith fadeOut()
+                    val duration = 380
+                    (fadeIn(animationSpec = tween(duration, delayMillis = 60)) + 
+                     slideInHorizontally(initialOffsetX = { -it / 6 }, animationSpec = tween(duration, easing = FastOutSlowInEasing)))
+                        .togetherWith(
+                            fadeOut(animationSpec = tween(180)) + 
+                            slideOutHorizontally(targetOffsetX = { it / 6 }, animationSpec = tween(duration, easing = FastOutSlowInEasing))
+                        )
                 },
                 label = "ScreenTransition"
             ) { screen ->
@@ -105,6 +112,284 @@ fun StoreAppContent(viewModel: StoreViewModel) {
                     is Screen.DeliveryPortal -> DeliveryPortalScreen(viewModel)
                     is Screen.DatabaseExplorer -> DatabaseExplorerScreen(viewModel)
                 }
+            }
+
+            // 1) Custom Delete Confirmation Overlay
+            val pendingDelete by viewModel.pendingDeleteAction.collectAsStateWithLifecycle()
+            if (pendingDelete != null) {
+                val action = pendingDelete!!
+                AlertDialog(
+                    onDismissRequest = { viewModel.pendingDeleteAction.value = null },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = AlertError,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                text = "تأكيد الحذف النهائي ⚠️",
+                                color = AlertError,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    text = {
+                        Text(
+                            text = "هل أنت متأكد تماماً من رغبتك في حذف \"${action.name}\"؟ لا يمكن استعادة البيانات بعد تأكيد هذا الإجراء.",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { viewModel.executeConfirmedDelete(action) },
+                            colors = ButtonDefaults.buttonColors(containerColor = AlertError),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("حذف الآن 🗑️", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { viewModel.pendingDeleteAction.value = null },
+                            border = BorderStroke(1.dp, TextGray.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        ) {
+                            Text("إلغاء التراجع", fontSize = 11.sp)
+                        }
+                    },
+                    containerColor = TealDark,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+
+            // 2) Elegant Success / Save Alert Banner
+            val successMsg by viewModel.successMessage.collectAsStateWithLifecycle()
+            LaunchedEffect(successMsg) {
+                if (successMsg != null) {
+                    delay(3500)
+                    viewModel.successMessage.value = null
+                }
+            }
+            if (successMsg != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = TealMedium),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f)),
+                        elevation = CardDefaults.cardElevation(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(GoldAccent.copy(alpha = 0.2f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = GoldAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = successMsg!!,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3) Love Pills - Favorite Feedback Toast
+            val favToast by viewModel.favoriteToast.collectAsStateWithLifecycle()
+            LaunchedEffect(favToast) {
+                if (favToast != null) {
+                    delay(2000)
+                    viewModel.favoriteToast.value = null
+                }
+            }
+            if (favToast != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 80.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.85f)),
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f)),
+                        modifier = Modifier.wrapContentSize()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (favToast!!.contains("إزالة")) Icons.Default.FavoriteBorder else Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = if (favToast!!.contains("إزالة")) AlertError else AlertSuccess,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = favToast!!,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 4) Complete Order Celebrating Success Modal
+            val orderSuccess by viewModel.orderSuccessPopup.collectAsStateWithLifecycle()
+            if (orderSuccess != null) {
+                val ord = orderSuccess!!
+                AlertDialog(
+                    onDismissRequest = { viewModel.orderSuccessPopup.value = null },
+                    title = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(60.dp)
+                                    .background(GoldAccent.copy(alpha = 0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = GoldAccent,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "تهانينا! تم تأكيد طلبك بنجاح 🎉",
+                                color = GoldAccent,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "رقم الطلب الخاص بك هو:",
+                                color = TextGray,
+                                fontSize = 10.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "#${ord.id}",
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                textAlign = TextAlign.Center
+                            )
+                            
+                            Spacer(modifier = Modifier.height(6.dp))
+                            
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = TealMedium),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("المستلم:", color = TextGray, fontSize = 10.sp)
+                                        Text(ord.customerName, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("العنوان:", color = TextGray, fontSize = 10.sp)
+                                        Text(ord.deliveryAddress, color = Color.White, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("الإجمالي:", color = TextGray, fontSize = 10.sp)
+                                        Text("${String.format("%.1f", ord.totalAmount)} ر.ي", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "جاري الآن تحضير سلعك وإسنادها لمندوب التوصيل الأقرب إليك لمطابقة معايير سرعة التوصيل لمركز الأحمدي.",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 10.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { 
+                                viewModel.orderSuccessPopup.value = null
+                                viewModel.navigateTo(Screen.OrderTracking(ord.id))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = TealDark),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("تتبع مسار التوصيل الآن 📍", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { viewModel.orderSuccessPopup.value = null },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("الرجوع إلى المتجر", color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center)
+                        }
+                    },
+                    containerColor = TealDark,
+                    shape = RoundedCornerShape(16.dp)
+                )
             }
         }
     }
@@ -402,17 +687,61 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
         // Welcome Header & Search
         item {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                Text(
-                    text = "مرحباً بك في مركز الأحمدي 👋",
-                    color = appTextColor(),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "ابحث عن جوالك المفضل وإكسسواراته المميزة",
-                    color = appSubTextColor(),
-                    fontSize = 12.sp
-                )
+                val customerNameValue by viewModel.customerName.collectAsStateWithLifecycle()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (customerNameValue.isEmpty()) "مرحباً بك في مركز الأحمدي 👋" else "مرحباً بك، $customerNameValue 👋",
+                            color = appTextColor(),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (customerNameValue.isEmpty()) "تصفح أفضل الجوالات ومستلزماتها في اليمن" else "اكتشف أحدث العروض والملحقات المميزة لجوالك",
+                            color = appSubTextColor(),
+                            fontSize = 12.sp
+                        )
+                    }
+                    
+                    // Personal circular avatar or Login gateway icon
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isAppDarkTheme()) GoldAccent else TealMedium)
+                            .clickable {
+                                if (customerNameValue.isEmpty()) {
+                                    viewModel.navigateTo(Screen.Login(AppRole.CUSTOMER))
+                                } else {
+                                    viewModel.navigateTo(Screen.Profile)
+                                }
+                            }
+                            .padding(2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (customerNameValue.isEmpty()) {
+                            Icon(
+                                imageVector = Icons.Default.PersonOutline,
+                                contentDescription = "تسجيل الدخول",
+                                tint = if (isAppDarkTheme()) TealDark else Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            val initial = customerNameValue.trim().firstOrNull()?.toString() ?: "أ"
+                            Text(
+                                text = initial,
+                                color = if (isAppDarkTheme()) TealDark else Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
                 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -430,13 +759,24 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
             }
         }
 
-        // Promotional Banner (Geometric Phone design)
+        // Interactive Promotional Banners Carousel (Compatible with light & dark modes)
         if (searchQuery.isEmpty() && selectedCatId == null) {
             item {
+                var activeBannerIndex by remember { mutableStateOf(0) }
+                val coroutineScope = rememberCoroutineScope()
+                
+                // Auto-slide effect every 5 seconds
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        delay(5000)
+                        activeBannerIndex = (activeBannerIndex + 1) % 3
+                    }
+                }
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
+                        .height(160.dp)
                         .padding(bottom = 20.dp),
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.Transparent)
@@ -446,20 +786,43 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
                             .fillMaxSize()
                             .background(
                                 brush = Brush.horizontalGradient(
-                                    colors = if (isAppDarkTheme()) {
-                                        listOf(TealLight, TealMedium)
-                                    } else {
-                                        listOf(Color(0xFFE0F2F1), Color(0xFFF2F6F7))
+                                    colors = when (activeBannerIndex) {
+                                        0 -> if (isAppDarkTheme()) listOf(TealLight, TealMedium) else listOf(Color(0xFFE0F2F1), Color(0xFFF2F6F7))
+                                        1 -> if (isAppDarkTheme()) listOf(Color(0xFF1B4D3E), Color(0xFF0F2B22)) else listOf(Color(0xFFE8F5E9), Color(0xFFF1F8E9))
+                                        else -> if (isAppDarkTheme()) listOf(Color(0xFF4A148C), Color(0xFF1A0033)) else listOf(Color(0xFFF3E5F5), Color(0xFFEDE7F6))
                                     }
                                 )
                             )
                             .border(1.dp, if (isAppDarkTheme()) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0), RoundedCornerShape(24.dp))
                     ) {
-                        // Left side decorative rotated geometric phone card (RTL -> End is Left)
+                        // Left/Right control chevrons
+                        IconButton(
+                            onClick = { activeBannerIndex = if (activeBannerIndex == 0) 2 else activeBannerIndex - 1 },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 4.dp)
+                                .size(32.dp)
+                                .background(Color.Black.copy(alpha = 0.15f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "السابق", tint = appTextColor(), modifier = Modifier.size(16.dp))
+                        }
+                        
+                        IconButton(
+                            onClick = { activeBannerIndex = (activeBannerIndex + 1) % 3 },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 4.dp)
+                                .size(32.dp)
+                                .background(Color.Black.copy(alpha = 0.15f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.ArrowForward, contentDescription = "التالي", tint = appTextColor(), modifier = Modifier.size(16.dp))
+                        }
+
+                        // Rotated Decorative Icon (representing item type)
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
-                                .padding(end = 20.dp)
+                                .padding(end = 48.dp)
                                 .size(75.dp, 105.dp)
                                 .graphicsLayer {
                                     rotationZ = -12f
@@ -469,55 +832,88 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PhoneAndroid,
+                                imageVector = when (activeBannerIndex) {
+                                    0 -> Icons.Default.PhoneAndroid
+                                    1 -> Icons.Default.Bolt
+                                    else -> Icons.Default.Headphones
+                                },
                                 contentDescription = null,
                                 tint = if (isAppDarkTheme()) Color.White.copy(alpha = 0.15f) else TealDark.copy(alpha = 0.1f),
                                 modifier = Modifier.size(44.dp)
                             )
                         }
 
-                        // Right side content (RTL -> Start is Right)
+                        // Banner content
                         Column(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
                                 .fillMaxHeight()
-                                .padding(16.dp)
-                                .width(180.dp),
+                                .padding(start = 48.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)
+                                .width(200.dp),
                             verticalArrangement = Arrangement.Center
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .background(GoldAccent, RoundedCornerShape(6.dp))
+                                    .background(
+                                        when (activeBannerIndex) {
+                                            0 -> GoldAccent
+                                            1 -> AlertSuccess
+                                            else -> AlertInfo
+                                        },
+                                        RoundedCornerShape(6.dp)
+                                    )
                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Text(
-                                    text = "عرض خاص",
-                                    color = TealDark,
-                                    fontSize = 10.sp,
+                                    text = when (activeBannerIndex) {
+                                        0 -> "عرض خاص"
+                                        1 -> "الأكثر طلباً"
+                                        else -> "وصل حديثاً"
+                                    },
+                                    color = if (activeBannerIndex == 0) TealDark else Color.White,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "iPhone 15 Pro",
+                                text = when (activeBannerIndex) {
+                                    0 -> "آيفون 15 برو ماكس"
+                                    1 -> "شواحن ذكية فائقة"
+                                    else -> "سماعات رأس لاسلكية"
+                                },
                                 color = appTextColor(),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Black
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "خصم 15% لفترة محدودة",
+                                text = when (activeBannerIndex) {
+                                    0 -> "خصم 15% لفترة محدودة"
+                                    1 -> "شحن سريع وآمن 100%"
+                                    else -> "صوت نقي وميزة عزل الضجيج"
+                                },
                                 color = appSubTextColor(),
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Normal
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            // Small action button
+                            Spacer(modifier = Modifier.height(6.dp))
+                            // Action Button
                             Box(
                                 modifier = Modifier
                                     .background(appButtonContainerColor(), RoundedCornerShape(10.dp))
                                     .clickable {
-                                        // Highlight or scroll to first iPhone/Phone item
+                                        // Scroll or navigate depending on selection
+                                        if (activeBannerIndex == 0) {
+                                            viewModel.searchQuery.value = "iPhone"
+                                        } else if (activeBannerIndex == 1) {
+                                            viewModel.selectedCategoryId.value = 2
+                                        } else {
+                                            viewModel.selectedCategoryId.value = 3
+                                        }
                                     }
                                     .padding(horizontal = 12.dp, vertical = 4.dp)
                             ) {
@@ -526,6 +922,31 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
                                     color = appButtonContentColor(),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        
+                        // Slide Dot Indicators
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            for (i in 0..2) {
+                                val isSelected = activeBannerIndex == i
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isSelected) 14.dp else 6.dp, 6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(
+                                            if (isSelected) {
+                                                if (isAppDarkTheme()) GoldAccent else TealDark
+                                            } else {
+                                                appSubTextColor().copy(alpha = 0.4f)
+                                            }
+                                        )
+                                        .clickable { activeBannerIndex = i }
                                 )
                             }
                         }
@@ -555,7 +976,7 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
                         color = GoldAccent,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable { viewModel.selectedCategoryId.value = null }
+                        modifier = Modifier.bounceClick { viewModel.selectedCategoryId.value = null }
                     )
                 }
                 
@@ -569,7 +990,7 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .clickable { viewModel.selectedCategoryId.value = null }
+                                .bounceClick { viewModel.selectedCategoryId.value = null }
                                 .width(64.dp)
                         ) {
                             Box(
@@ -611,7 +1032,7 @@ fun CustomerHomeScreen(viewModel: StoreViewModel) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .clickable { viewModel.selectedCategoryId.value = cat.id }
+                                .bounceClick { viewModel.selectedCategoryId.value = cat.id }
                                 .width(64.dp)
                                 .testTag("category_chip_${cat.id}")
                         ) {
@@ -2840,7 +3261,14 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                                                         Icon(Icons.Default.Edit, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(16.dp))
                                                     }
                                                     IconButton(
-                                                        onClick = { viewModel.adminDeleteProduct(item) },
+                                                        onClick = { 
+                                                            viewModel.pendingDeleteAction.value = com.example.viewmodel.DeleteConfirmation(
+                                                                type = com.example.viewmodel.DeleteType.PRODUCT,
+                                                                id = item.id,
+                                                                name = item.nameAr,
+                                                                extraData = item
+                                                            )
+                                                        },
                                                         modifier = Modifier.size(24.dp)
                                                     ) {
                                                         Icon(Icons.Default.Delete, contentDescription = null, tint = AlertError, modifier = Modifier.size(16.dp))
@@ -2933,7 +3361,12 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(brand, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            IconButton(onClick = { viewModel.deleteBrand(brand) }) {
+                                            IconButton(onClick = { 
+                                                viewModel.pendingDeleteAction.value = com.example.viewmodel.DeleteConfirmation(
+                                                    type = com.example.viewmodel.DeleteType.BRAND,
+                                                    name = brand
+                                                )
+                                            }) {
                                                 Icon(Icons.Default.Delete, contentDescription = null, tint = AlertError, modifier = Modifier.size(16.dp))
                                             }
                                         }
@@ -3237,7 +3670,13 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                                                         contentPadding = PaddingValues(horizontal = 6.dp),
                                                         modifier = Modifier.height(28.dp)
                                                     ) { Text(rep.status, fontSize = 9.sp) }
-                                                    IconButton(onClick = { viewModel.deleteDeliveryRep(rep.id) }, modifier = Modifier.size(28.dp)) {
+                                                    IconButton(onClick = { 
+                                                        viewModel.pendingDeleteAction.value = com.example.viewmodel.DeleteConfirmation(
+                                                            type = com.example.viewmodel.DeleteType.DELIVERY_REP,
+                                                            id = rep.id,
+                                                            name = rep.name
+                                                        )
+                                                    }, modifier = Modifier.size(28.dp)) {
                                                         Icon(Icons.Default.Delete, contentDescription = null, tint = AlertError, modifier = Modifier.size(16.dp))
                                                     }
                                                 }
@@ -3338,7 +3777,13 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                                                     contentPadding = PaddingValues(horizontal = 6.dp),
                                                     modifier = Modifier.height(28.dp)
                                                 ) { Text(if (coupon.active) "نشط" else "معطل", fontSize = 9.sp) }
-                                                IconButton(onClick = { viewModel.deleteCoupon(coupon.id) }) {
+                                                IconButton(onClick = { 
+                                                    viewModel.pendingDeleteAction.value = com.example.viewmodel.DeleteConfirmation(
+                                                        type = com.example.viewmodel.DeleteType.COUPON,
+                                                        id = coupon.id,
+                                                        name = coupon.code
+                                                    )
+                                                }) {
                                                     Icon(Icons.Default.Delete, contentDescription = null, tint = AlertError, modifier = Modifier.size(16.dp))
                                                 }
                                             }
@@ -3382,7 +3827,13 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                                                 Text(banner.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                                 Text("الصورة: ${banner.imageUrl}", color = TextGray, fontSize = 10.sp)
                                             }
-                                            IconButton(onClick = { viewModel.deleteAdBanner(banner.id) }) {
+                                            IconButton(onClick = { 
+                                                viewModel.pendingDeleteAction.value = com.example.viewmodel.DeleteConfirmation(
+                                                    type = com.example.viewmodel.DeleteType.BANNER,
+                                                    id = banner.id,
+                                                    name = banner.title
+                                                )
+                                            }) {
                                                 Icon(Icons.Default.Delete, contentDescription = null, tint = AlertError, modifier = Modifier.size(16.dp))
                                             }
                                         }
@@ -3422,7 +3873,13 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                                                         ) { Text("موافقة واعتِماد ✅", fontSize = 8.sp) }
                                                     }
                                                     Button(
-                                                        onClick = { viewModel.deleteReview(rev.id) },
+                                                        onClick = { 
+                                                            viewModel.pendingDeleteAction.value = com.example.viewmodel.DeleteConfirmation(
+                                                                type = com.example.viewmodel.DeleteType.REVIEW,
+                                                                id = rev.id,
+                                                                name = "تقييم العميل ${rev.customerName}"
+                                                            )
+                                                        },
                                                         colors = ButtonDefaults.buttonColors(containerColor = AlertError, contentColor = Color.White),
                                                         contentPadding = PaddingValues(horizontal = 8.dp),
                                                         modifier = Modifier.height(24.dp)

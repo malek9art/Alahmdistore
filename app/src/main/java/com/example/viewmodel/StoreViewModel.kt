@@ -52,13 +52,30 @@ data class ApiLog(
 )
 
 data class SupportMessage(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = java.util.UUID.randomUUID().toString(),
     val sender: String, // "user", "agent"
     val text: String,
     val timestamp: Long = System.currentTimeMillis()
 )
 
+enum class DeleteType {
+    PRODUCT, BRAND, DELIVERY_REP, COUPON, BANNER, REVIEW, TEAM_MEMBER, CART_ITEM, CLEAR_CART
+}
+
+data class DeleteConfirmation(
+    val type: DeleteType,
+    val id: Int = 0,
+    val name: String = "",
+    val extraData: Any? = null
+)
+
 class StoreViewModel(application: Application) : AndroidViewModel(application) {
+
+    // Centralized popup, dialog and notification states
+    val pendingDeleteAction = MutableStateFlow<DeleteConfirmation?>(null)
+    val successMessage = MutableStateFlow<String?>(null)
+    val favoriteToast = MutableStateFlow<String?>(null)
+    val orderSuccessPopup = MutableStateFlow<Order?>(null)
 
     private val db: StoreDatabase = Room.databaseBuilder(
         application,
@@ -732,6 +749,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         appStoreSupportEmail.value = email
         appStoreWorkingHours.value = hours
         appStoreMaintenanceMode.value = maint
+        successMessage.value = "تم حفظ التعديلات وإعدادات المتجر العامة لمركز الأحمدي بنجاح! ⚙️"
         viewModelScope.launch {
             repository.insertAuditLog(AuditLog(actionAr = "تعديل الإعدادات العامة للمتجر", userRole = "مدير", detailsAr = "تم تغيير مسمى المتجر ومعلومات التواصل وصيانة التطبيق."))
         }
@@ -783,6 +801,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             putInt("pay_installment_months", instMonths)
         }.apply()
 
+        successMessage.value = "تم حفظ إعدادات بوابات الدفع الإلكتروني والضرائب والعملات بنجاح! 💳"
         viewModelScope.launch {
             repository.insertAuditLog(
                 AuditLog(
@@ -1608,11 +1627,15 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleFavorite(productId: Int) {
         viewModelScope.launch {
             val isFav = favoriteIds.value.contains(productId)
+            val prod = products.value.find { it.id == productId }
+            val prodName = prod?.nameAr ?: "المنتج"
             if (isFav) {
                 repository.removeFavorite(productId)
+                favoriteToast.value = "تمت الإزالة من المفضلة: $prodName 💔"
                 logSimulatedApi("DELETE", "/api/v1/favorites/$productId", 200, "", "{\"status\":\"removed\"}")
             } else {
                 repository.addFavorite(productId)
+                favoriteToast.value = "تمت الإضافة إلى المفضلة: $prodName ❤️"
                 logSimulatedApi("POST", "/api/v1/favorites", 201, "{\"productId\":$productId}", "{\"status\":\"added\",\"productId\":$productId}")
             }
         }
@@ -1757,6 +1780,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             val responseJson = "{\"status\":\"success\",\"orderId\":$orderId,\"message\":\"order_created_successfully\"}"
             logSimulatedApi("POST", "/api/v1/orders", 201, requestJson, responseJson)
 
+            orderSuccessPopup.value = newOrder.copy(id = orderId.toInt())
             onOrderPlaced(orderId.toInt())
         }
     }
@@ -1810,6 +1834,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
 
+            successMessage.value = "تم حفظ المنتج \"$nameAr\" وتحديث بياناته بنجاح! 📱"
             logSimulatedApi("POST", "/api/v1/admin/products", 201, "{\"id\":$id,\"nameAr\":\"$nameAr\"}", "{\"status\":\"success\"}")
         }
     }
@@ -1839,6 +1864,51 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
             logSimulatedApi("DELETE", "/api/v1/admin/products/${product.id}", 200, "", "{\"status\":\"deleted\"}")
+        }
+    }
+
+    fun executeConfirmedDelete(confirmation: DeleteConfirmation) {
+        viewModelScope.launch {
+            when (confirmation.type) {
+                DeleteType.PRODUCT -> {
+                    val prod = confirmation.extraData as? Product
+                    prod?.let {
+                        adminDeleteProduct(it)
+                        successMessage.value = "تم حذف المنتج \"${it.nameAr}\" بنجاح من قاعدة البيانات! 🗑️"
+                    }
+                }
+                DeleteType.BRAND -> {
+                    deleteBrand(confirmation.name)
+                    successMessage.value = "تم إزالة العلامة التجارية \"${confirmation.name}\" بنجاح! 🗑️"
+                }
+                DeleteType.DELIVERY_REP -> {
+                    deleteDeliveryRep(confirmation.id)
+                    successMessage.value = "تم إزالة مندوب التوصيل \"${confirmation.name}\" بنجاح! 🗑️"
+                }
+                DeleteType.COUPON -> {
+                    deleteCoupon(confirmation.id)
+                    successMessage.value = "تم حذف كوبون الخصم \"${confirmation.name}\" بنجاح! 🗑️"
+                }
+                DeleteType.BANNER -> {
+                    deleteAdBanner(confirmation.id)
+                    successMessage.value = "تم إزالة البنر الإعلاني \"${confirmation.name}\" بنجاح! 🗑️"
+                }
+                DeleteType.REVIEW -> {
+                    deleteReview(confirmation.id)
+                    successMessage.value = "تم حذف التقييم بنجاح! 🗑️"
+                }
+                DeleteType.CART_ITEM -> {
+                    val cartId = confirmation.id
+                    repository.removeFromCart(cartId)
+                    successMessage.value = "تم إزالة السلعة من سلة التسوق! 🗑️"
+                }
+                DeleteType.CLEAR_CART -> {
+                    repository.clearCart()
+                    successMessage.value = "تم تفريغ سلة التسوق بالكامل! 🗑️"
+                }
+                else -> {}
+            }
+            pendingDeleteAction.value = null
         }
     }
 

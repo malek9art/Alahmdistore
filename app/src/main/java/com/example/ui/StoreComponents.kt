@@ -23,6 +23,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -398,7 +401,7 @@ fun ProductGridCard(
         modifier = modifier
             .fillMaxWidth()
             .shadow(if (isAppDarkTheme()) 2.dp else 4.dp, RoundedCornerShape(24.dp))
-            .clickable { onProductClick() }
+            .bounceClick { onProductClick() }
             .testTag("product_card_${product.id}"),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(24.dp),
@@ -494,14 +497,14 @@ fun ProductGridCard(
                 ) {
                     Column {
                         Text(
-                            text = "${product.price} ر.س",
+                            text = "${product.price} ر.ي",
                             color = if (isAppDarkTheme()) GoldAccent else TealDark,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black
                         )
                         if (product.oldPrice != null) {
                             Text(
-                                text = "${product.oldPrice} ر.س",
+                                text = "${product.oldPrice} ر.ي",
                                 color = subTextColor.copy(alpha = 0.8f),
                                 fontSize = 10.sp,
                                 style = LocalTextStyle.current.copy(
@@ -622,17 +625,17 @@ fun appBgColor(): Color {
 
 @Composable
 fun appSurfaceColor(): Color {
-    return if (isAppDarkTheme()) TealMedium else Color.White
+    return if (isAppDarkTheme()) TealMedium else Color.White.copy(alpha = 0.85f)
 }
 
 @Composable
 fun appCardColor(): Color {
-    return if (isAppDarkTheme()) CardBackground else Color.White
+    return if (isAppDarkTheme()) CardBackground else Color.White.copy(alpha = 0.72f)
 }
 
 @Composable
 fun appCardBorderColor(): Color {
-    return if (isAppDarkTheme()) Color.Transparent else Color(0xFFE2E8F0)
+    return if (isAppDarkTheme()) Color.Transparent else Color(0xFFE2E8F0).copy(alpha = 0.55f)
 }
 
 @Composable
@@ -698,4 +701,41 @@ fun appTextFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedLabelColor = if (isAppDarkTheme()) GoldAccent else TealMedium,
     unfocusedLabelColor = appSubTextColor()
 )
+
+@Composable
+fun Modifier.bounceClick(
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "BounceScale"
+    )
+
+    if (!enabled) return this
+
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    try {
+                        awaitRelease()
+                    } finally {
+                        isPressed = false
+                    }
+                },
+                onTap = { onClick() }
+            )
+        }
+}
 

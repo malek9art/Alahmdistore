@@ -38,6 +38,9 @@ import com.example.viewmodel.AppRole
 import com.example.viewmodel.Screen
 import com.example.viewmodel.StoreViewModel
 import kotlinx.coroutines.delay
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -45,6 +48,7 @@ fun StoreAppContent(viewModel: StoreViewModel) {
     val currentRole by viewModel.appRole.collectAsStateWithLifecycle()
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
+    val logoUri by viewModel.appStoreLogoUri.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -55,7 +59,8 @@ fun StoreAppContent(viewModel: StoreViewModel) {
                     currentRole = currentRole,
                     onRoleSelected = { viewModel.switchRole(it) },
                     isDarkTheme = isDarkTheme,
-                    onToggleTheme = { viewModel.toggleTheme() }
+                    onToggleTheme = { viewModel.toggleTheme() },
+                    logoUri = logoUri
                 )
             }
         },
@@ -73,6 +78,7 @@ fun StoreAppContent(viewModel: StoreViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
         ) {
             AnimatedContent(
                 targetState = currentScreen,
@@ -268,6 +274,49 @@ fun StoreAppContent(viewModel: StoreViewModel) {
                 }
             }
 
+            // 3.5) Cart Feedback Toast
+            val cartToast by viewModel.cartToast.collectAsStateWithLifecycle()
+            LaunchedEffect(cartToast) {
+                if (cartToast != null) {
+                    delay(2500)
+                    viewModel.cartToast.value = null
+                }
+            }
+            if (cartToast != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 80.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.85f)),
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f)),
+                        modifier = Modifier.wrapContentSize()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingCart,
+                                contentDescription = null,
+                                tint = GoldAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = cartToast!!,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
             // 4) Complete Order Celebrating Success Modal
             val orderSuccess by viewModel.orderSuccessPopup.collectAsStateWithLifecycle()
             if (orderSuccess != null) {
@@ -398,6 +447,7 @@ fun StoreAppContent(viewModel: StoreViewModel) {
 // Splash Screen
 @Composable
 fun SplashScreen(viewModel: StoreViewModel) {
+    val logoUri by viewModel.appStoreLogoUri.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         delay(2500)
         viewModel.navigateTo(Screen.Onboarding)
@@ -414,7 +464,7 @@ fun SplashScreen(viewModel: StoreViewModel) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(24.dp)
         ) {
-            AlahmadiLogo(size = 120.dp)
+            AlahmadiLogo(size = 120.dp, logoUri = logoUri)
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = "مركز الأحمدي للجوالات ومستلزماتها",
@@ -2149,7 +2199,8 @@ fun CheckoutScreen(viewModel: StoreViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(16.dp),
+                        .padding(16.dp)
+                        .imePadding(),
                     contentAlignment = Alignment.Center
                 ) {
                     InteractiveSimulatedMap(
@@ -2604,6 +2655,7 @@ fun SupportChatScreen(viewModel: StoreViewModel) {
 @Composable
 fun AboutStoreScreen(viewModel: StoreViewModel) {
     val darkTheme = isAppDarkTheme()
+    val logoUri by viewModel.appStoreLogoUri.collectAsStateWithLifecycle()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2614,7 +2666,7 @@ fun AboutStoreScreen(viewModel: StoreViewModel) {
         Text("عن مركز الأحمدي للجوالات", color = appTextColor(), fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 
-        AlahmadiLogo(modifier = Modifier.align(Alignment.CenterHorizontally), size = 100.dp)
+        AlahmadiLogo(modifier = Modifier.align(Alignment.CenterHorizontally), size = 100.dp, logoUri = logoUri)
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
@@ -6682,6 +6734,7 @@ fun LoginScreen(viewModel: StoreViewModel, role: AppRole) {
     var password by remember { mutableStateOf("") }
     val error by viewModel.loginError.collectAsStateWithLifecycle()
     val darkTheme = isAppDarkTheme()
+    val logoUri by viewModel.appStoreLogoUri.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -6696,7 +6749,7 @@ fun LoginScreen(viewModel: StoreViewModel, role: AppRole) {
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            AlahmadiLogo(size = 80.dp)
+            AlahmadiLogo(size = 80.dp, logoUri = logoUri)
             Spacer(modifier = Modifier.height(16.dp))
 
             val titleText = when (role) {
@@ -7187,6 +7240,7 @@ fun OffersScreen(viewModel: StoreViewModel) {
     val products by viewModel.products.collectAsStateWithLifecycle()
     val offerProducts = products.filter { it.isOffer }
     val darkTheme = isAppDarkTheme()
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     Column(
         modifier = Modifier
@@ -7232,12 +7286,15 @@ fun OffersScreen(viewModel: StoreViewModel) {
                     modifier = Modifier
                         .background(Color.White, RoundedCornerShape(10.dp))
                         .padding(horizontal = 14.dp, vertical = 8.dp)
-                        .clickable { viewModel.applyCoupon("AHMADI10") },
+                        .clickable {
+                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("AHMADI10"))
+                            viewModel.applyCoupon("AHMADI10")
+                        },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("AHMADI10", color = TealDark, fontSize = 16.sp, fontWeight = FontWeight.Black)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("(اضغط لتفعيل الكوبون)", color = TealMedium, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("(اضغط لنسخ وتفعيل الكوبون 📋)", color = TealMedium, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

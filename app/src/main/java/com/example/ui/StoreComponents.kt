@@ -35,16 +35,42 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.Product
 import com.example.ui.theme.*
+import coil.compose.AsyncImage
 import com.example.viewmodel.AppRole
 
 @Composable
-fun AlahmadiLogo(modifier: Modifier = Modifier, size: Dp = 80.dp) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
+fun AlahmadiLogo(modifier: Modifier = Modifier, size: Dp = 80.dp, logoUri: String? = null) {
+    if (!logoUri.isNullOrEmpty()) {
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            AsyncImage(
+                model = logoUri,
+                contentDescription = "شعار المتجر",
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .border(2.dp, GoldAccent, CircleShape),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "الأحـمـدي",
+                color = GoldAccent,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.16f).sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    } else {
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
             modifier = Modifier
                 .size(size)
                 .background(
@@ -191,6 +217,7 @@ fun AlahmadiLogo(modifier: Modifier = Modifier, size: Dp = 80.dp) {
             textAlign = TextAlign.Center
         )
     }
+    }
 }
 
 @Composable
@@ -199,7 +226,8 @@ fun RoleSelectorTopBar(
     onRoleSelected: (AppRole) -> Unit,
     isDarkTheme: Boolean = true,
     onToggleTheme: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    logoUri: String? = null
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -223,7 +251,7 @@ fun RoleSelectorTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.clickable { onRoleSelected(AppRole.CUSTOMER) }
             ) {
-                AlahmadiLogo(size = 38.dp)
+                AlahmadiLogo(size = 38.dp, logoUri = logoUri)
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(

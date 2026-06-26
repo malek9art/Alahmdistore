@@ -75,6 +75,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     val pendingDeleteAction = MutableStateFlow<DeleteConfirmation?>(null)
     val successMessage = MutableStateFlow<String?>(null)
     val favoriteToast = MutableStateFlow<String?>(null)
+    val cartToast = MutableStateFlow<String?>(null)
     val orderSuccessPopup = MutableStateFlow<Order?>(null)
 
     private val db: StoreDatabase = Room.databaseBuilder(
@@ -222,6 +223,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     val appStoreSupportEmail = MutableStateFlow("support@alahmadi.com")
     val appStoreWorkingHours = MutableStateFlow("من 9:00 صباحاً إلى 11:00 مساءً")
     val appStoreMaintenanceMode = MutableStateFlow(false)
+    val appStoreLogoUri = MutableStateFlow<String?>(null)
 
     // Payment Config State
     val payCashOnDeliveryEnabled = MutableStateFlow(true)
@@ -742,16 +744,17 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // General Store Info Functions
-    fun updateStoreGeneralInfo(title: String, banner: String, contact: String, email: String, hours: String, maint: Boolean) {
+    fun updateStoreGeneralInfo(title: String, banner: String, contact: String, email: String, hours: String, maint: Boolean, logoUri: String? = null) {
         appStoreTitle.value = title
         appStoreBannerText.value = banner
         appStoreContactMobile.value = contact
         appStoreSupportEmail.value = email
         appStoreWorkingHours.value = hours
         appStoreMaintenanceMode.value = maint
+        appStoreLogoUri.value = logoUri
         successMessage.value = "تم حفظ التعديلات وإعدادات المتجر العامة لمركز الأحمدي بنجاح! ⚙️"
         viewModelScope.launch {
-            repository.insertAuditLog(AuditLog(actionAr = "تعديل الإعدادات العامة للمتجر", userRole = "مدير", detailsAr = "تم تغيير مسمى المتجر ومعلومات التواصل وصيانة التطبيق."))
+            repository.insertAuditLog(AuditLog(actionAr = "تعديل الإعدادات العامة للمتجر", userRole = "مدير", detailsAr = "تم تغيير مسمى المتجر ومعلومات التواصل وصيانة التطبيق والشعار."))
         }
     }
 
@@ -1651,6 +1654,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 repository.addToCart(CartItem(productId = product.id, quantity = 1, selectedVariant = variant))
                 logSimulatedApi("POST", "/api/v1/cart", 201, "{\"productId\":${product.id},\"quantity\":1,\"variant\":\"$variant\"}", "{\"status\":\"created\"}")
             }
+            cartToast.value = "تمت إضافة \"${product.nameAr}\" إلى سلة التسوق الخاصة بك بنجاح! 🛒"
         }
     }
 
@@ -1679,16 +1683,19 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 activeCoupon.value = "AHMADI10"
                 couponDiscountPercent.value = 0.10 // 10%
                 couponError.value = null
+                cartToast.value = "تم تفعيل الكوبون (AHMADI10) بنجاح وتطبيق خصم 10%! 🎟️"
                 logSimulatedApi("POST", "/api/v1/coupons/apply", 200, "{\"code\":\"$code\"}", "{\"status\":\"success\",\"discount\":0.10}")
             } else if (code.trim().uppercase() == "FREE") {
                 activeCoupon.value = "FREE"
                 couponDiscountPercent.value = 1.00 // 100% discount
                 couponError.value = null
+                cartToast.value = "تم تفعيل الكوبون التجريبي (FREE) بنجاح وتطبيق خصم 100%! 🎟️"
                 logSimulatedApi("POST", "/api/v1/coupons/apply", 200, "{\"code\":\"$code\"}", "{\"status\":\"success\",\"discount\":1.00}")
             } else {
                 activeCoupon.value = null
                 couponDiscountPercent.value = 0.0
                 couponError.value = "الكوبون المدخل غير فعال!"
+                cartToast.value = "فشل في تفعيل الكوبون: الكوبون غير فعال! ❌"
                 logSimulatedApi("POST", "/api/v1/coupons/apply", 400, "{\"code\":\"$code\"}", "{\"status\":\"error\",\"message\":\"coupon_not_found\"}")
             }
         }

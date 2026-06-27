@@ -8,6 +8,8 @@ import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
+import org.json.JSONObject
+import org.json.JSONArray
 
 enum class AppRole {
     CUSTOMER,
@@ -171,14 +173,23 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         DeliveryRep(3, "عبد العزيز سعيد", "0565556667", "سيارة إلنترا", 4.9f, "غير نشط")
     ))
 
-    // Shipping Zones State
+    // Shipping Zones State (Yemeni Governorates)
     val shippingZones = MutableStateFlow<List<ShippingZone>>(listOf(
-        ShippingZone(1, "الرياض", 15.0, true),
-        ShippingZone(2, "مكة المكرمة", 25.0, true),
-        ShippingZone(3, "جدة", 20.0, true),
-        ShippingZone(4, "المدينة المنورة", 25.0, true),
-        ShippingZone(5, "الدمام", 20.0, true),
-        ShippingZone(6, "أبها", 30.0, true)
+        ShippingZone(1, "صنعاء (الأمانة والمحافظة)", 1500.0, true),
+        ShippingZone(2, "عدن", 2500.0, true),
+        ShippingZone(3, "تعز", 2000.0, true),
+        ShippingZone(4, "حضرموت (المكلا وسيئون)", 4000.0, true),
+        ShippingZone(5, "إب", 2000.0, true),
+        ShippingZone(6, "الحديدة", 2500.0, true),
+        ShippingZone(7, "مأرب", 3000.0, true),
+        ShippingZone(8, "ذمار", 1500.0, true),
+        ShippingZone(9, "شبوة (عتق)", 3500.0, true),
+        ShippingZone(10, "لحج", 2500.0, true),
+        ShippingZone(11, "أبين", 2500.0, true),
+        ShippingZone(12, "صعدة", 3000.0, true),
+        ShippingZone(13, "حجة", 2500.0, true),
+        ShippingZone(14, "المهرة (الغيضة)", 5000.0, true),
+        ShippingZone(15, "أرخبيل سقطرى", 7000.0, true)
     ))
 
     // Coupons State
@@ -215,6 +226,8 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         TeamMemberRole(2, "خالد صالح (محرر)", "Editor", true, false, false),
         TeamMemberRole(3, "ياسر العلي (مشرف الشحنات)", "Delivery Manager", false, true, false)
     ))
+
+    val currentProfile = MutableStateFlow<com.example.data.ProfileDto?>(null)
 
     // General Store Info State
     val appStoreTitle = MutableStateFlow("مركز الأحمدي للاتصالات")
@@ -739,6 +752,105 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             repository.insertAuditLog(AuditLog(actionAr = "إضافة عضو فريق وصلاحيات", userRole = "مدير", detailsAr = "تعيين العضو الجديد $name بدور $role"))
         }
     }
+
+    fun addTeamMemberSupabase(
+        name: String,
+        email: String,
+        phone: String,
+        pass: String,
+        role: String, // "admin" or "delivery" or "customer"
+        allowedPanels: String, // e.g. "1,2,5,6"
+        onResult: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            if (isSupabaseEnabled.value && supabaseUrl.value.isNotEmpty() && supabaseKey.value.isNotEmpty()) {
+                try {
+                    val request = SignUpRequest(
+                        email = email,
+                        password = pass,
+                        phone = phone,
+                        userMetadata = mapOf(
+                            "name" to name,
+                            "role" to role,
+                            "allowed_panels" to allowedPanels
+                        )
+                    )
+                    val response = SupabaseClient.signUp(request)
+                    if (response.isSuccessful) {
+                        val body = response.body()
+                        if (body != null) {
+                            // Insert to Team list
+                            val newId = (teamRoles.value.maxOfOrNull { it.id } ?: 0) + 1
+                            teamRoles.value = teamRoles.value + TeamMemberRole(
+                                newId,
+                                name,
+                                "${getRoleNameAr(role)} ($email)",
+                                allowedPanels.contains("2"),
+                                allowedPanels.contains("6"),
+                                allowedPanels.contains("16")
+                            )
+                            repository.insertAuditLog(
+                                AuditLog(
+                                    actionAr = "إضافة عضو فريق سحابي",
+                                    userRole = "مدير",
+                                    detailsAr = "تم تسجيل الموظف الجديد بنجاح في Supabase: $name ($email), الدور: ${getRoleNameAr(role)}"
+                                )
+                            )
+                            onResult(true, "تم إنشاء حساب الموظف وتحديد صلاحياته بنجاح على قاعدة البيانات!")
+                        } else {
+                            onResult(false, "استجابة فارغة من خادم المصادقة")
+                        }
+                    } else {
+                        val errorBody = response.errorBody()?.string() ?: ""
+                        onResult(false, "فشل إنشاء الحساب: ${parseSupabaseError(errorBody)}")
+                    }
+                } catch (e: Exception) {
+                    onResult(false, "حدث خطأ أثناء الاتصال بالخادم: ${e.localizedMessage}")
+                }
+            } else {
+                // Simulated Sandbox Mode
+                val newId = (teamRoles.value.maxOfOrNull { it.id } ?: 0) + 1
+                teamRoles.value = teamRoles.value + TeamMemberRole(
+                    newId,
+                    name,
+                    "${getRoleNameAr(role)} (محاكاة)",
+                    allowedPanels.contains("2"),
+                    allowedPanels.contains("6"),
+                    allowedPanels.contains("16")
+                )
+                repository.insertAuditLog(
+                    AuditLog(
+                        actionAr = "إضافة عضو فريق محاكاة",
+                        userRole = "مدير",
+                        detailsAr = "تم تسجيل الموظف (محاكاة): $name, الدور: ${getRoleNameAr(role)}"
+                    )
+                )
+                onResult(true, "تمت إضافة الموظف بنجاح (وضع المحاكاة)")
+            }
+        }
+    }
+
+    fun resetPassword(email: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            if (isSupabaseEnabled.value && supabaseUrl.value.isNotEmpty() && supabaseKey.value.isNotEmpty()) {
+                try {
+                    val response = SupabaseClient.resetPassword(email)
+                    if (response.isSuccessful) {
+                        onResult(true, "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني بنجاح!")
+                    } else {
+                        val errorBody = response.errorBody()?.string() ?: ""
+                        onResult(false, "فشل إرسال الرابط: ${parseSupabaseError(errorBody)}")
+                    }
+                } catch (e: Exception) {
+                    onResult(false, "خطأ في الاتصال: ${e.localizedMessage}")
+                }
+            } else {
+                // Simulated mode success
+                onResult(true, "تم محاكاة إرسال رابط إعادة تعيين كلمة المرور إلى البريد: $email")
+            }
+        }
+    }
+
     fun deleteTeamMember(id: Int) {
         teamRoles.value = teamRoles.value.filter { it.id != id }
     }
@@ -834,7 +946,525 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Backup & Restore Simulation Functions
+    // Real complete backup serialization & deserialization using JSON
+    fun exportCompleteBackup(context: android.content.Context, uri: android.net.Uri, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val cats = categories.value
+                val prods = products.value
+                val ords = orders.value
+                val ordItems = repository.getAllOrderItems()
+                val notes = notifications.value
+                val logs = auditLogs.value
+
+                val backupJson = JSONObject()
+                val metadata = JSONObject()
+                metadata.put("backup_id", "bk_" + System.currentTimeMillis())
+                metadata.put("timestamp", System.currentTimeMillis())
+                metadata.put("app_name", "AlahmadiStore")
+                backupJson.put("metadata", metadata)
+
+                // Categories
+                val catsArray = JSONArray()
+                cats.forEach {
+                    val jo = JSONObject()
+                    jo.put("id", it.id)
+                    jo.put("nameAr", it.nameAr)
+                    jo.put("iconName", it.iconName)
+                    catsArray.put(jo)
+                }
+                backupJson.put("categories", catsArray)
+
+                // Products
+                val prodsArray = JSONArray()
+                prods.forEach {
+                    val jo = JSONObject()
+                    jo.put("id", it.id)
+                    jo.put("nameAr", it.nameAr)
+                    jo.put("descriptionAr", it.descriptionAr)
+                    jo.put("price", it.price)
+                    jo.put("oldPrice", it.oldPrice ?: JSONObject.NULL)
+                    jo.put("imageUrl", it.imageUrl)
+                    jo.put("categoryId", it.categoryId)
+                    jo.put("stockQuantity", it.stockQuantity)
+                    jo.put("isFeatured", it.isFeatured)
+                    jo.put("isOffer", it.isOffer)
+                    jo.put("rating", it.rating.toDouble())
+                    jo.put("specsAr", it.specsAr)
+                    prodsArray.put(jo)
+                }
+                backupJson.put("products", prodsArray)
+
+                // Orders
+                val ordsArray = JSONArray()
+                ords.forEach {
+                    val jo = JSONObject()
+                    jo.put("id", it.id)
+                    jo.put("customerName", it.customerName)
+                    jo.put("customerPhone", it.customerPhone)
+                    jo.put("deliveryAddress", it.deliveryAddress)
+                    jo.put("paymentMethod", it.paymentMethod)
+                    jo.put("shippingCost", it.shippingCost)
+                    jo.put("totalAmount", it.totalAmount)
+                    jo.put("status", it.status)
+                    jo.put("timestamp", it.timestamp)
+                    jo.put("deliveryAgentName", it.deliveryAgentName ?: JSONObject.NULL)
+                    jo.put("chosenCurrency", it.chosenCurrency)
+                    jo.put("convertedAmount", it.convertedAmount)
+                    jo.put("failureReason", it.failureReason ?: JSONObject.NULL)
+                    jo.put("paymentReference", it.paymentReference ?: JSONObject.NULL)
+                    jo.put("paymentStatus", it.paymentStatus ?: JSONObject.NULL)
+                    jo.put("latitude", it.latitude ?: JSONObject.NULL)
+                    jo.put("longitude", it.longitude ?: JSONObject.NULL)
+                    ordsArray.put(jo)
+                }
+                backupJson.put("orders", ordsArray)
+
+                // OrderItems
+                val ordItemsArray = JSONArray()
+                ordItems.forEach {
+                    val jo = JSONObject()
+                    jo.put("id", it.id)
+                    jo.put("orderId", it.orderId)
+                    jo.put("productId", it.productId)
+                    jo.put("productName", it.productName)
+                    jo.put("quantity", it.quantity)
+                    jo.put("price", it.price)
+                    ordItemsArray.put(jo)
+                }
+                backupJson.put("order_items", ordItemsArray)
+
+                // Notifications
+                val notesArray = JSONArray()
+                notes.forEach {
+                    val jo = JSONObject()
+                    jo.put("id", it.id)
+                    jo.put("titleAr", it.titleAr)
+                    jo.put("messageAr", it.messageAr)
+                    jo.put("timestamp", it.timestamp)
+                    jo.put("isRead", it.isRead)
+                    notesArray.put(jo)
+                }
+                backupJson.put("notifications", notesArray)
+
+                // AuditLogs
+                val logsArray = JSONArray()
+                logs.forEach {
+                    val jo = JSONObject()
+                    jo.put("id", it.id)
+                    jo.put("actionAr", it.actionAr)
+                    jo.put("userRole", it.userRole)
+                    jo.put("timestamp", it.timestamp)
+                    jo.put("detailsAr", it.detailsAr)
+                    logsArray.put(jo)
+                }
+                backupJson.put("audit_logs", logsArray)
+
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(backupJson.toString(2).toByteArray(Charsets.UTF_8))
+                }
+                
+                repository.insertAuditLog(AuditLog(actionAr = "تصدير نسخ احتياطي لملف", userRole = "مدير", detailsAr = "تم تصدير نسخة احتياطية متكاملة لملف خارجي بنجاح. الفئات: ${cats.size}، المنتجات: ${prods.size}، الطلبات: ${ords.size}."))
+                onComplete(true, "تم تصدير النسخة الاحتياطية بنجاح إلى ملف!")
+            } catch (e: Exception) {
+                onComplete(false, "خطأ أثناء التصدير: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun importCompleteBackup(context: android.content.Context, uri: android.net.Uri, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val jsonString = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    inputStream.bufferedReader().use { it.readText() }
+                } ?: throw Exception("تعذر قراءة الملف المحدد.")
+
+                val backupJson = JSONObject(jsonString)
+                
+                // Parse Categories
+                val catsArray = backupJson.optJSONArray("categories")
+                val catsList = mutableListOf<Category>()
+                if (catsArray != null) {
+                    for (i in 0 until catsArray.length()) {
+                        val jo = catsArray.getJSONObject(i)
+                        catsList.add(Category(
+                            id = jo.getInt("id"),
+                            nameAr = jo.getString("nameAr"),
+                            iconName = jo.getString("iconName")
+                        ))
+                    }
+                }
+
+                // Parse Products
+                val prodsArray = backupJson.optJSONArray("products")
+                val prodsList = mutableListOf<Product>()
+                if (prodsArray != null) {
+                    for (i in 0 until prodsArray.length()) {
+                        val jo = prodsArray.getJSONObject(i)
+                        prodsList.add(Product(
+                            id = jo.getInt("id"),
+                            nameAr = jo.getString("nameAr"),
+                            descriptionAr = jo.getString("descriptionAr"),
+                            price = jo.getDouble("price"),
+                            oldPrice = if (jo.isNull("oldPrice")) null else jo.getDouble("oldPrice"),
+                            imageUrl = jo.getString("imageUrl"),
+                            categoryId = jo.getInt("categoryId"),
+                            stockQuantity = jo.getInt("stockQuantity"),
+                            isFeatured = jo.optBoolean("isFeatured", false),
+                            isOffer = jo.optBoolean("isOffer", false),
+                            rating = jo.optDouble("rating", 4.5).toFloat(),
+                            specsAr = jo.optString("specsAr", "")
+                        ))
+                    }
+                }
+
+                // Parse Orders
+                val ordsArray = backupJson.optJSONArray("orders")
+                val ordsList = mutableListOf<Order>()
+                if (ordsArray != null) {
+                    for (i in 0 until ordsArray.length()) {
+                        val jo = ordsArray.getJSONObject(i)
+                        ordsList.add(Order(
+                            id = jo.getInt("id"),
+                            customerName = jo.getString("customerName"),
+                            customerPhone = jo.getString("customerPhone"),
+                            deliveryAddress = jo.getString("deliveryAddress"),
+                            paymentMethod = jo.getString("paymentMethod"),
+                            shippingCost = jo.getDouble("shippingCost"),
+                            totalAmount = jo.getDouble("totalAmount"),
+                            status = jo.getString("status"),
+                            timestamp = jo.getLong("timestamp"),
+                            deliveryAgentName = if (jo.isNull("deliveryAgentName")) null else jo.getString("deliveryAgentName"),
+                            chosenCurrency = jo.optString("chosenCurrency", "الريال اليمني (ر.ي)"),
+                            convertedAmount = jo.optDouble("convertedAmount", 0.0),
+                            failureReason = if (jo.isNull("failureReason")) null else jo.getString("failureReason"),
+                            paymentReference = if (jo.isNull("paymentReference")) null else jo.getString("paymentReference"),
+                            paymentStatus = if (jo.isNull("paymentStatus")) "معلق" else jo.getString("paymentStatus"),
+                            latitude = if (jo.isNull("latitude")) null else jo.getDouble("latitude"),
+                            longitude = if (jo.isNull("longitude")) null else jo.getDouble("longitude")
+                        ))
+                    }
+                }
+
+                // Parse OrderItems
+                val ordItemsArray = backupJson.optJSONArray("order_items")
+                val ordItemsList = mutableListOf<OrderItem>()
+                if (ordItemsArray != null) {
+                    for (i in 0 until ordItemsArray.length()) {
+                        val jo = ordItemsArray.getJSONObject(i)
+                        ordItemsList.add(OrderItem(
+                            id = jo.getInt("id"),
+                            orderId = jo.getInt("orderId"),
+                            productId = jo.getInt("productId"),
+                            productName = jo.getString("productName"),
+                            quantity = jo.getInt("quantity"),
+                            price = jo.getDouble("price")
+                        ))
+                    }
+                }
+
+                // Parse Notifications
+                val notesArray = backupJson.optJSONArray("notifications")
+                val notesList = mutableListOf<Notification>()
+                if (notesArray != null) {
+                    for (i in 0 until notesArray.length()) {
+                        val jo = notesArray.getJSONObject(i)
+                        notesList.add(Notification(
+                            id = jo.getInt("id"),
+                            titleAr = jo.getString("titleAr"),
+                            messageAr = jo.getString("messageAr"),
+                            timestamp = jo.getLong("timestamp"),
+                            isRead = jo.optBoolean("isRead", false)
+                        ))
+                    }
+                }
+
+                // Parse AuditLogs
+                val logsArray = backupJson.optJSONArray("audit_logs")
+                val logsList = mutableListOf<AuditLog>()
+                if (logsArray != null) {
+                    for (i in 0 until logsArray.length()) {
+                        val jo = logsArray.getJSONObject(i)
+                        logsList.add(AuditLog(
+                            id = jo.getInt("id"),
+                            actionAr = jo.getString("actionAr"),
+                            userRole = jo.getString("userRole"),
+                            timestamp = jo.getLong("timestamp"),
+                            detailsAr = jo.optString("detailsAr", "")
+                        ))
+                    }
+                }
+
+                // Clean existing and Restore in Database
+                repository.clearAllData()
+                
+                // Re-insert lists
+                if (catsList.isNotEmpty()) {
+                    repository.insertCategories(catsList)
+                }
+                if (prodsList.isNotEmpty()) {
+                    repository.insertProducts(prodsList)
+                }
+                ordsList.forEach {
+                    repository.createOrder(it, emptyList())
+                }
+                if (ordItemsList.isNotEmpty()) {
+                    repository.insertOrderItems(ordItemsList)
+                }
+                if (notesList.isNotEmpty()) {
+                    repository.insertNotifications(notesList)
+                }
+                if (logsList.isNotEmpty()) {
+                    repository.insertAuditLogs(logsList)
+                }
+
+                repository.insertAuditLog(AuditLog(actionAr = "استيراد واستعادة نسخ احتياطي من ملف", userRole = "مدير", detailsAr = "تمت استعادة قاعدة البيانات بالكامل من ملف خارجي بنجاح. الفئات: ${catsList.size}، المنتجات: ${prodsList.size}، الطلبات: ${ordsList.size}."))
+                onComplete(true, "تم استعادة قاعدة البيانات بالكامل بنجاح من الملف! 🔄")
+            } catch (e: Exception) {
+                onComplete(false, "فشلت الاستعادة: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    // Excel/CSV Stock Template Export
+    fun exportStockTemplate(context: android.content.Context, uri: android.net.Uri, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val prods = products.value
+                val csvBuilder = StringBuilder()
+                // UTF-8 BOM for Excel Arabic compatibility
+                csvBuilder.append('\ufeff')
+                csvBuilder.append("ID,اسم المنتج,الكمية,السعر\n")
+                prods.forEach {
+                    csvBuilder.append("${it.id},${it.nameAr},${it.stockQuantity},${it.price}\n")
+                }
+
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(csvBuilder.toString().toByteArray(Charsets.UTF_8))
+                }
+                
+                repository.insertAuditLog(AuditLog(actionAr = "تصدير قالب كشف المخزون", userRole = "مدير", detailsAr = "تم تصدير قالب كشف المخزون الحالي بصيغة Excel/CSV لقائمة المنتجات."))
+                onComplete(true, "تم تصدير قالب كشف المخزون (Excel/CSV) بنجاح!")
+            } catch (e: Exception) {
+                onComplete(false, "خطأ أثناء تصدير قالب كشف المخزون: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    // Excel/CSV Stock Import
+    fun importStockFromCsv(context: android.content.Context, uri: android.net.Uri, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val content = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    inputStream.bufferedReader().use { it.readText() }
+                } ?: throw Exception("تعذر قراءة ملف كشف اكسل.")
+
+                val lines = content.split('\n', '\r').filter { it.trim().isNotEmpty() }
+                if (lines.size <= 1) {
+                    throw Exception("الملف فارغ أو لا يحتوي على صفوف بيانات.")
+                }
+
+                var updateCount = 0
+                // Skip header line
+                for (i in 1 until lines.size) {
+                    val line = lines[i]
+                    // Remove UTF-8 BOM if present on first line's start
+                    val cleanedLine = if (line.startsWith('\ufeff')) line.substring(1) else line
+                    val tokens = cleanedLine.split(',')
+                    if (tokens.size >= 3) {
+                        val idToken = tokens[0].trim()
+                        val stockToken = tokens[2].trim()
+                        val prodId = idToken.toIntOrNull()
+                        val newStock = stockToken.toIntOrNull()
+                        if (prodId != null && newStock != null) {
+                            val prod = repository.getProductById(prodId)
+                            if (prod != null) {
+                                repository.updateProductStock(prod.id, newStock)
+                                updateCount++
+                            }
+                        }
+                    }
+                }
+
+                repository.insertAuditLog(AuditLog(actionAr = "استيراد كشف المخزون", userRole = "مدير", detailsAr = "تم استيراد كشف المخزون Excel/CSV وتحديث كميات لـ $updateCount منتج."))
+                onComplete(true, "تم استيراد كشف اكسل وتحديث مخزون $updateCount منتج بنجاح! 📦")
+            } catch (e: Exception) {
+                onComplete(false, "خطأ أثناء استيراد البيانات: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    // Real and Integrated Printing System for Invoices & Shipping Labels
+    fun printOrderInvoice(context: android.content.Context, order: Order, items: List<OrderItem>) {
+        val html = """
+            <!DOCTYPE html>
+            <html dir="rtl" lang="ar">
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body { font-family: 'sans-serif', 'Arial'; padding: 20px; color: #333; line-height: 1.6; }
+                    .header { text-align: center; border-bottom: 2px solid #005f73; padding-bottom: 15px; margin-bottom: 20px; }
+                    .header h1 { color: #005f73; margin: 0; font-size: 24px; }
+                    .header p { margin: 5px 0 0 0; font-size: 14px; color: #666; }
+                    .details-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                    .details-table td { padding: 8px; font-size: 12px; }
+                    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+                    .items-table th { background-color: #005f73; color: white; padding: 10px; font-size: 13px; text-align: right; }
+                    .items-table td { border-bottom: 1px solid #ddd; padding: 10px; font-size: 12px; }
+                    .totals { float: left; width: 250px; margin-top: 10px; }
+                    .totals td { padding: 6px; font-size: 13px; }
+                    .totals .grand-total { font-weight: bold; color: #005f73; font-size: 16px; border-top: 2px solid #005f73; }
+                    .footer { text-align: center; margin-top: 50px; font-size: 11px; color: #777; border-top: 1px dashed #ccc; padding-top: 15px; }
+                    .barcode { font-family: monospace; font-size: 16px; letter-spacing: 3px; font-weight: bold; background: #eee; padding: 8px; display: inline-block; margin-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>مركز الأحمدي للجوالات ومستلزماتها</h1>
+                    <p>الفاتورة الرسمية للطلب الرقمي #${order.id}</p>
+                    <p>هاتف: 777000111 | البريد الإلكتروني: support@alahmadi.com</p>
+                </div>
+
+                <table class="details-table">
+                    <tr>
+                        <td><strong>اسم العميل:</strong> ${order.customerName}</td>
+                        <td><strong>تاريخ الطلب:</strong> ${java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale("ar")).format(java.util.Date(order.timestamp))}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>رقم الهاتف:</strong> ${order.customerPhone}</td>
+                        <td><strong>طريقة الدفع:</strong> ${order.paymentMethod}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2"><strong>عنوان التوصيل:</strong> ${order.deliveryAddress}</td>
+                    </tr>
+                </table>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>المنتج</th>
+                            <th>السعر الفردي</th>
+                            <th>الكمية</th>
+                            <th>الإجمالي</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.joinToString("") {
+                            val rowTotal = it.price * it.quantity
+                            "<tr><td>${it.productName}</td><td>${it.price} ر.ي</td><td>${it.quantity}</td><td>$rowTotal ر.ي</td></tr>"
+                        }}
+                    </tbody>
+                </table>
+
+                <div class="totals">
+                    <table style="width:100%">
+                        <tr>
+                            <td>قيمة المنتجات:</td>
+                            <td style="text-align:left">${order.totalAmount - order.shippingCost} ر.ي</td>
+                        </tr>
+                        <tr>
+                            <td>أجور التوصيل:</td>
+                            <td style="text-align:left">${order.shippingCost} ر.ي</td>
+                        </tr>
+                        <tr class="grand-total">
+                            <td>المبلغ الإجمالي:</td>
+                            <td style="text-align:left">${order.totalAmount} ر.ي</td>
+                        </tr>
+                    </table>
+                </div>
+                <div style="clear: both;"></div>
+
+                <div class="footer">
+                    <p>شكراً لشرائكم من مركز الأحمدي. يرجى الاحتفاظ بهذه الفاتورة للاسترجاع أو الضمان.</p>
+                    <div class="barcode">ORD-${order.id}</div>
+                    <p>تم الإنشاء والتأكيد برمجياً عبر نظام مركز الأحمدي الذكي للمبيعات</p>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+
+        printHtml(context, "Invoice_ORD_${order.id}", html)
+    }
+
+    fun printShippingLabel(context: android.content.Context, order: Order) {
+        val html = """
+            <!DOCTYPE html>
+            <html dir="rtl" lang="ar">
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body { font-family: 'sans-serif', 'Arial'; padding: 15px; border: 3px double #000; width: 380px; margin: auto; }
+                    .title { text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+                    .section { margin-bottom: 12px; font-size: 13px; }
+                    .section strong { display: inline-block; width: 100px; }
+                    .barcode-container { text-align: center; margin-top: 20px; padding: 10px; border-top: 1px dashed #000; }
+                    .barcode { font-family: monospace; font-size: 18px; letter-spacing: 4px; font-weight: bold; background: #000; color: #fff; padding: 10px; display: inline-block; }
+                    .footer { text-align: center; font-size: 10px; margin-top: 15px; color: #555; }
+                </style>
+            </head>
+            <body>
+                <div class="title">بويصلة شحن الطلب 🏷️</div>
+                <div class="section">
+                    <strong>المرسل:</strong> مركز الأحمدي للجوالات
+                </div>
+                <div class="section">
+                    <strong>الهاتف:</strong> 777000111
+                </div>
+                <div style="border-top:1px solid #000; margin: 10px 0;"></div>
+                <div class="section">
+                    <strong>المرسل إليه:</strong> ${order.customerName}
+                </div>
+                <div class="section">
+                    <strong>رقم العميل:</strong> ${order.customerPhone}
+                </div>
+                <div class="section">
+                    <strong>العنوان:</strong> ${order.deliveryAddress}
+                </div>
+                <div class="section">
+                    <strong>طريقة الدفع:</strong> ${order.paymentMethod}
+                </div>
+                <div class="section">
+                    <strong>مبلغ التحصيل:</strong> ${order.totalAmount} ر.ي
+                </div>
+                <div class="section">
+                    <strong>المندوب المعين:</strong> ${order.deliveryAgentName?.ifEmpty { "لم يعين بعد" } ?: "لم يعين بعد"}
+                </div>
+
+                <div class="barcode-container">
+                    <div class="barcode">ORD-${order.id}</div>
+                    <div style="font-size: 9px; margin-top: 4px;">كود الشحنة والباركود الذكي للتسليم</div>
+                </div>
+
+                <div class="footer">
+                    مركز الأحمدي للجوالات ومستلزماتها - خياركم الموثوق
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+
+        printHtml(context, "ShippingLabel_ORD_${order.id}", html)
+    }
+
+    private fun printHtml(context: android.content.Context, jobName: String, htmlContent: String) {
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        mainHandler.post {
+            try {
+                val webView = android.webkit.WebView(context)
+                webView.webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                        val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as android.print.PrintManager
+                        val printAdapter = webView.createPrintDocumentAdapter(jobName)
+                        printManager.print(jobName, printAdapter, android.print.PrintAttributes.Builder().build())
+                    }
+                }
+                webView.loadDataWithBaseURL(null, htmlContent, "text/html", "UTF-8", null)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // Legacy Simulator triggers for fallback compatibility
     fun triggerBackup(onComplete: (String) -> Unit) {
         viewModelScope.launch {
             repository.insertAuditLog(AuditLog(actionAr = "إجراء نسخ احتياطي", userRole = "مدير", detailsAr = "تم إنشاء نسخة احتياطية مشفرة لقواعد البيانات المحلية بنجاح."))
@@ -1325,8 +1955,19 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                     if (response.isSuccessful) {
                         val body = response.body()
                         if (body != null) {
-                            val userRoleMeta = body.user.userMetadata?.get("role") ?: "customer"
-                            val userNameMeta = body.user.userMetadata?.get("name") ?: body.user.email?.substringBefore("@") ?: "عميل الأحمدي"
+                            // Fetch user profile from Supabase profiles table
+                            val dbProfile = SupabaseClient.fetchProfileById(body.user.id)
+                            currentProfile.value = dbProfile ?: com.example.data.ProfileDto(
+                                id = body.user.id,
+                                name = body.user.userMetadata?.get("name") ?: body.user.email?.substringBefore("@") ?: "مستخدم الأحمدي",
+                                phone = body.user.phone ?: "",
+                                role = body.user.userMetadata?.get("role") ?: "customer",
+                                allowedPanels = body.user.userMetadata?.get("allowed_panels") ?: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21"
+                            )
+
+                            val activeProfile = currentProfile.value!!
+                            val userRoleMeta = activeProfile.role
+                            val userNameMeta = activeProfile.name
                             
                             // Role access validation check
                             val isAuthorized = when (role) {
@@ -1415,39 +2056,51 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 // Local Simulated Sandbox Mode
                 when (role) {
                     AppRole.ADMIN -> {
-                        val isClassicAdmin = (usernameOrPhone == "admin" || usernameOrPhone == "أحمدي") && pass == "admin"
-                        val isNewAdmin = usernameOrPhone == "mana" && pass == "123456"
-                        if (isClassicAdmin || isNewAdmin) {
+                        val isAhmadiAdmin = usernameOrPhone.trim() == "ahmadicenterstore@gmail.com" && pass == "CenterAhmadiPass2026"
+                        if (isAhmadiAdmin) {
                             isLoggedInAdmin.value = true
                             appRole.value = AppRole.ADMIN
-                            repository.insertAuditLog(AuditLog(actionAr = "تسجيل دخول المدير", userRole = "مدير", detailsAr = "تم الدخول بنجاح إلى لوحة التحكم (محاكاة). المستخدم: $usernameOrPhone"))
-                            logSimulatedApi("POST", "/api/v1/auth/admin/login", 200, "{\"username\":\"$usernameOrPhone\"}", "{\"status\":\"success\",\"token\":\"sb_adm_992x\"}")
+                            currentProfile.value = com.example.data.ProfileDto(
+                                id = "c7d93a25-de42-4504-82e7-ceeedcba145e",
+                                name = "نائف سلطان (مدير مركز الأحمدي)",
+                                phone = "777229775",
+                                role = "admin",
+                                allowedPanels = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21"
+                            )
+                            repository.insertAuditLog(AuditLog(actionAr = "تسجيل دخول المدير (محاكاة)", userRole = "مدير", detailsAr = "تم الدخول بنجاح إلى لوحة التحكم. الحساب: $usernameOrPhone"))
+                            logSimulatedApi("POST", "/api/v1/auth/admin/login", 200, "{\"email\":\"$usernameOrPhone\"}", "{\"status\":\"success\",\"token\":\"sb_adm_992x\"}")
                             onSuccess()
                         } else {
-                            loginError.value = "خطأ في اسم المستخدم أو كلمة مرور المدير! (الافتراضي: mana / 123456)"
+                            loginError.value = "البريد الإلكتروني للمدير أو كلمة المرور غير صحيحة! (البريد: ahmadicenterstore@gmail.com / كلمة المرور المسجلة الخاصة بك)"
                         }
                     }
                     AppRole.DELIVERY -> {
-                        val isClassicDelivery = (usernameOrPhone == "delivery" || usernameOrPhone == "مندوب") && pass == "delivery"
-                        val isNewDelivery = usernameOrPhone == "mamm" && pass == "654321"
-                        if (isClassicDelivery || isNewDelivery) {
+                        val isAhmadiDelivery = usernameOrPhone.trim() == "delivery@alahmadi.com" && pass == "DeliveryPass2026"
+                        if (isAhmadiDelivery) {
                             isLoggedInDelivery.value = true
                             appRole.value = AppRole.DELIVERY
-                            repository.insertAuditLog(AuditLog(actionAr = "تسجيل دخول مندوب", userRole = "مندوب", detailsAr = "تم الدخول بنجاح إلى لوحة المناديب (محاكاة). المستخدم: $usernameOrPhone"))
-                            logSimulatedApi("POST", "/api/v1/auth/delivery/login", 200, "{\"username\":\"$usernameOrPhone\"}", "{\"status\":\"success\",\"token\":\"sb_del_883y\"}")
+                            currentProfile.value = com.example.data.ProfileDto(
+                                id = "delivery-sandbox-uid",
+                                name = "ياسر العلي (مندوب التوصيل الرئيسي)",
+                                phone = "0588888888",
+                                role = "delivery",
+                                allowedPanels = "6,8,9"
+                            )
+                            repository.insertAuditLog(AuditLog(actionAr = "تسجيل دخول مندوب (محاكاة)", userRole = "مندوب", detailsAr = "تم الدخول بنجاح إلى بوابة المناديب. الحساب: $usernameOrPhone"))
+                            logSimulatedApi("POST", "/api/v1/auth/delivery/login", 200, "{\"email\":\"$usernameOrPhone\"}", "{\"status\":\"success\",\"token\":\"sb_del_883y\"}")
                             onSuccess()
                         } else {
-                            loginError.value = "خطأ في اسم المستخدم أو كلمة مرور مندوب التوصيل! (الافتراضي: mamm / 654321)"
+                            loginError.value = "البريد الإلكتروني للمندوب أو كلمة المرور غير صحيحة! (الافتراضي: delivery@alahmadi.com / DeliveryPass2026)"
                         }
                     }
                     AppRole.CUSTOMER -> {
                         isLoggedInCustomer.value = true
-                        customerName.value = usernameOrPhone
-                        customerPhone.value = if (usernameOrPhone.all { it.isDigit() }) usernameOrPhone else "077" + (10000000..99999999).random().toString()
+                        customerName.value = if (usernameOrPhone.contains("@")) usernameOrPhone.substringBefore("@") else usernameOrPhone
+                        customerPhone.value = if (usernameOrPhone.all { it.isDigit() }) usernameOrPhone else "05" + (10000000..99999999).random().toString()
                         customerEmail.value = if (usernameOrPhone.contains("@")) usernameOrPhone else "$usernameOrPhone@alahmadi.com"
                         appRole.value = AppRole.CUSTOMER
-                        repository.insertAuditLog(AuditLog(actionAr = "تسجيل دخول العميل", userRole = "عميل", detailsAr = "الاسم: $usernameOrPhone (محاكاة)"))
-                        logSimulatedApi("POST", "/api/v1/auth/customer/login", 200, "{\"phone\":\"$usernameOrPhone\"}", "{\"status\":\"success\",\"token\":\"sb_cust_221z\"}")
+                        repository.insertAuditLog(AuditLog(actionAr = "تسجيل دخول العميل", userRole = "عميل", detailsAr = "البريد/الهاتف: $usernameOrPhone (محاكاة)"))
+                        logSimulatedApi("POST", "/api/v1/auth/customer/login", 200, "{\"identifier\":\"$usernameOrPhone\"}", "{\"status\":\"success\",\"token\":\"sb_cust_221z\"}")
                         onSuccess()
                     }
                 }

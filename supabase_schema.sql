@@ -75,6 +75,7 @@ CREATE TABLE public.profiles (
     name VARCHAR(255) NOT NULL,
     phone VARCHAR(50) UNIQUE NOT NULL,
     role public.app_role_enum DEFAULT 'customer'::public.app_role_enum NOT NULL,
+    allowed_panels VARCHAR(255) DEFAULT '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21' NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -261,12 +262,13 @@ CREATE INDEX idx_audit_logs_time ON public.audit_logs(created_at);
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, phone, role)
+  INSERT INTO public.profiles (id, name, phone, role, allowed_panels)
   VALUES (
     new.id,
     COALESCE(new.raw_user_meta_data->>'name', 'عميل مركز الأحمدي'),
     COALESCE(new.raw_user_meta_data->>'phone', '05' || floor(random() * 90000000 + 10000000)::text),
-    'customer'::public.app_role_enum
+    COALESCE((new.raw_user_meta_data->>'role')::public.app_role_enum, 'customer'::public.app_role_enum),
+    COALESCE(new.raw_user_meta_data->>'allowed_panels', '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21')
   );
   RETURN NEW;
 END;
@@ -497,18 +499,25 @@ INSERT INTO public.categories (name_ar, slug, icon) VALUES
 ON CONFLICT (name_ar) DO NOTHING;
 
 -- ب. إدراج منتجات المتجر بأسعارها الحقيقية ومخزونها المتوافق مع التطبيق
-INSERT INTO public.products (category_id, name_ar, desc_ar, price, old_price, is_offer, stock) VALUES
-(1, 'آيفون 15 برو ماكس - 256 جيجابايت', 'العملاق الجديد من آبل مع هيكل من التيتانيوم القوي وخفيف الوزن وكاميرا تصوير خرافية مع زووم خارق.', 4899.00, 5299.00, true, 15),
-(1, 'آيفون 14 برو - 128 جيجابايت', 'شاشة ديناميك آيلاند الرائعة مع معالج آبل القوي A16 بيونيك وكاميرا بدقة 48 ميجابيكسل.', 3699.00, NULL, false, 8),
-(2, 'سامسونج جالكسي S24 ألترا - 512 جيجابايت', 'وحش الإنتاجية مع قلم S-Pen المدمج وميزات الذكاء الاصطناعي الفائقة Galaxy AI كاميرات زووم 100x مذهلة.', 4299.00, 4799.00, true, 12),
-(2, 'شاومي 14 الترا - 512 جيجابايت', 'كاميرات لايكا الاحترافية مع معالج Snapdragon 8 Gen 3 الأقوى للتطبيقات والألعاب مع شاحن سريع جداً.', 3499.00, NULL, false, 5),
-(3, 'شاحن أنكر نانو سريع بقوة 30 واط', 'أصغر رأس شاحن سريع متوافق مع الآيفون والأندرويد مع تقنية حماية البطارية الذكية من السخونة.', 69.00, 89.00, true, 100),
-(3, 'منصة شحن لاسلكي ماج سيف مغناطيسي', 'منصة شحن سريعة ومثالية لسطح المكتب متوافقة مع الأجهزة والعلب المغناطيسية الأصلية.', 129.00, NULL, false, 45),
-(4, 'سماعة آبل إيربودز برو الجيل الثاني', 'إلغاء ضوضاء نشط مضاعف، ميزة الصوت المكاني المخصص لتجربة استماع ساحرة وعمر بطارية ممتاز.', 849.00, 949.00, true, 25),
-(4, 'سماعة سوني اللاسلكية WH-1000XM5', 'السماعة الرائدة عالمياً في عزل الضوضاء وصوت عالي الدقة غاية في النقاوة مناسبة للعمل والسفر والجيمنج.', 1199.00, NULL, false, 14),
-(5, 'كفر حماية تيتانيوم مقاوم للصدمات S24', 'كفر فليكسيبل مقاوم للسقوط من ارتفاع 3 أمتار يحمي زوايا الهاتف والعدسات الخلفية البارزة.', 49.00, 79.00, true, 200),
-(5, 'شاشة حماية نانو سيراميك للآيفون 15', 'زجاج مقوى فائق القوة ومقاوم للخدش والبصمات يغطي الشاشة بالكامل دون التأثير على حساسية اللمس.', 35.00, NULL, false, 150)
-ON CONFLICT (name_ar) DO NOTHING;
+-- تم استبدال ON CONFLICT بطريقة SELECT JOIN لمنع أخطاء الـ Unique Constraints المفقودة ولربط التصنيفات بدقة وديناميكية
+INSERT INTO public.products (category_id, name_ar, desc_ar, price, old_price, is_offer, stock)
+SELECT c.id, p.name_ar, p.desc_ar, p.price, p.old_price, p.is_offer, p.stock
+FROM (VALUES
+  ('أجهزة الآيفون', 'آيفون 15 برو ماكس - 256 جيجابايت', 'العملاق الجديد من آبل مع هيكل من التيتانيوم القوي وخفيف الوزن وكاميرا تصوير خرافية مع زووم خارق.', 4899.00, 5299.00, true, 15),
+  ('أجهزة الآيفون', 'آيفون 14 برو - 128 جيجابايت', 'شاشة ديناميك آيلاند الرائعة مع معالج آبل القوي A16 بيونيك وكاميرا بدقة 48 ميجابيكسل.', 3699.00, NULL::numeric, false, 8),
+  ('أجهزة الأندرويد', 'سامسونج جالكسي S24 ألترا - 512 جيجابايت', 'وحش الإنتاجية مع قلم S-Pen المدمج وميزات الذكاء الاصطناعي الفائقة Galaxy AI كاميرات زووم 100x مذهلة.', 4299.00, 4799.00, true, 12),
+  ('أجهزة الأندرويد', 'شاومي 14 الترا - 512 جيجابايت', 'كاميرات لايكا الاحترافية مع معالج Snapdragon 8 Gen 3 الأقوى للتطبيقات والألعاب مع شاحن سريع جداً.', 3499.00, NULL::numeric, false, 5),
+  ('الشواحن والمنصات', 'شاحن أنكر نانو سريع بقوة 30 واط', 'أصغر رأس شاحن سريع متوافق مع الآيفون والأندرويد مع تقنية حماية البطارية الذكية من السخونة.', 69.00, 89.00, true, 100),
+  ('الشواحن والمنصات', 'منصة شحن لاسلكي ماج سيف مغناطيسي', 'منصة شحن سريعة ومثالية لسطح المكتب متوافقة مع الأجهزة والعلب المغناطيسية الأصلية.', 129.00, NULL::numeric, false, 45),
+  ('السماعات والصوتيات', 'سماعة آبل إيربودز برو الجيل الثاني', 'إلغاء ضوضاء نشط مضاعف، ميزة الصوت المكاني المخصص لتجربة استماع ساحرة وعمر بطارية ممتاز.', 849.00, 949.00, true, 25),
+  ('السماعات والصوتيات', 'سماعة سوني اللاسلكية WH-1000XM5', 'السماعة الرائدة عالمياً في عزل الضوضاء وصوت عالي الدقة غاية في النقاوة مناسبة للعمل والسفر والجيمنج.', 1199.00, NULL::numeric, false, 14),
+  ('حماية الشاشة والكفرات', 'كفر حماية تيتانيوم مقاوم للصدمات S24', 'كفر فليكسيبل مقاوم للسقوط من ارتفاع 3 أمتار يحمي زوايا الهاتف والعدسات الخلفية البارزة.', 49.00, 79.00, true, 200),
+  ('حماية الشاشة والكفرات', 'شاشة حماية نانو سيراميك للآيفون 15', 'زجاج مقوى فائق القوة ومقاوم للخدش والبصمات يغطي الشاشة بالكامل دون التأثير على حساسية اللمس.', 35.00, NULL::numeric, false, 150)
+) AS p(cat_name, name_ar, desc_ar, price, old_price, is_offer, stock)
+JOIN public.categories c ON c.name_ar = p.cat_name
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.products WHERE name_ar = p.name_ar
+);
 
 -- ج. إدراج الأدوار الأساسية في النظام للتحقق منها فورياً
 INSERT INTO public.roles (name, display_name_ar, description_ar) VALUES
@@ -524,6 +533,21 @@ INSERT INTO public.permissions (codename, display_name_ar, description_ar) VALUE
 ('orders:update', 'إدارة وتحديث الطلبات', 'تحديث حالات فواتير المشتريات وإلغاء الطلبات أو إسنادها للمناديب.'),
 ('shipments:update', 'تحديث حالات شحن المندوب', 'تحديث حالات التوصيل للشحنات قيد الطريق وكتابة ملاحظات التوصيل.')
 ON CONFLICT (codename) DO NOTHING;
+
+-- هـ. ربط الأدوار بالصلاحيات المناسبة لتفعيل نظام الحماية RBAC
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM public.roles r, public.permissions p
+WHERE r.name = 'admin'::public.app_role_enum
+  AND p.codename IN ('products:create', 'products:update', 'orders:update')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM public.roles r, public.permissions p
+WHERE r.name = 'delivery'::public.app_role_enum
+  AND p.codename = 'shipments:update'
+ON CONFLICT DO NOTHING;
 
 -- ======================================================================================
 -- هـ. نظام الإشعارات اللحظية التلقائي (Automatic Database Notification System)

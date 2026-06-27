@@ -30,6 +30,11 @@ data class SignInRequest(
 )
 
 @JsonClass(generateAdapter = true)
+data class ResetPasswordRequest(
+    @Json(name = "email") val email: String
+)
+
+@JsonClass(generateAdapter = true)
 data class UserResponse(
     @Json(name = "id") val id: String,
     @Json(name = "email") val email: String?,
@@ -55,7 +60,8 @@ data class ProfileDto(
     @Json(name = "id") val id: String,
     @Json(name = "name") val name: String,
     @Json(name = "phone") val phone: String,
-    @Json(name = "role") val role: String
+    @Json(name = "role") val role: String,
+    @Json(name = "allowed_panels") val allowedPanels: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -152,6 +158,12 @@ interface SupabaseAuthApi {
         @Header("apikey") apiKey: String,
         @Header("Authorization") authHeader: String
     ): Response<UserResponse>
+
+    @POST("auth/v1/recover")
+    suspend fun resetPassword(
+        @Header("apikey") apiKey: String,
+        @Body request: ResetPasswordRequest
+    ): Response<Unit>
 }
 
 interface SupabaseRestApi {
@@ -162,6 +174,13 @@ interface SupabaseRestApi {
     suspend fun getProfiles(
         @Header("apikey") apiKey: String,
         @Header("Authorization") authHeader: String
+    ): Response<List<ProfileDto>>
+
+    @GET("rest/v1/profiles")
+    suspend fun getProfileById(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") authHeader: String,
+        @Query("id") filter: String
     ): Response<List<ProfileDto>>
 
     @POST("rest/v1/profiles")
@@ -502,5 +521,21 @@ object SupabaseClient {
     suspend fun addAuditLog(log: AuditLogDto): AuditLogDto? {
         val response = getRestService().insertAuditLog(currentKey, getAuthHeader(), log = log)
         return if (response.isSuccessful) response.body()?.firstOrNull() else throw Exception("Failed audit log insert: ${response.message()}")
+    }
+
+    // Profiles & Auth Extra
+    suspend fun fetchProfileById(id: String): ProfileDto? {
+        val service = restService ?: return null
+        return try {
+            val response = service.getProfileById(currentKey, getAuthHeader(), "eq.$id")
+            if (response.isSuccessful) response.body()?.firstOrNull() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun resetPassword(email: String): Response<Unit> {
+        val service = authService ?: throw IllegalStateException("Supabase client is not initialized.")
+        return service.resetPassword(currentKey, ResetPasswordRequest(email))
     }
 }

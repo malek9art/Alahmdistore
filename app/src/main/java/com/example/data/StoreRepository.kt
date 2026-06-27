@@ -77,6 +77,12 @@ class StoreRepository(private val storeDao: StoreDao) {
     fun getOrderItems(orderId: Int): Flow<List<OrderItem>> = 
         storeDao.getOrderItems(orderId)
 
+    suspend fun getAllOrderItems(): List<OrderItem> = 
+        storeDao.getAllOrderItems()
+
+    suspend fun insertOrderItems(items: List<OrderItem>) = 
+        storeDao.insertOrderItems(items)
+
     // Notifications
     val allNotifications: Flow<List<Notification>> = storeDao.getAllNotifications()
 
@@ -100,4 +106,20 @@ class StoreRepository(private val storeDao: StoreDao) {
 
     suspend fun removeFavorite(prodId: Int) = 
         storeDao.removeFavorite(prodId)
+
+    // Clear and restore helper methods
+    suspend fun clearAllData() {
+        storeDao.clearCategories()
+        storeDao.clearProducts()
+        storeDao.clearOrders()
+        storeDao.clearOrderItems()
+        storeDao.clearNotifications()
+        storeDao.clearAuditLogs()
+    }
+
+    suspend fun insertAuditLogs(logs: List<AuditLog>) =
+        storeDao.insertAuditLogs(logs)
+
+    suspend fun insertNotifications(notifications: List<Notification>) =
+        storeDao.insertNotifications(notifications)
 }

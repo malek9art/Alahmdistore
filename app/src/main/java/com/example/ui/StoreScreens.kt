@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -2737,6 +2738,53 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
 
     var selectedPanel by remember { mutableStateOf<Int?>(null) } // null: Hub, 1 to 20
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var adminToastMessage by remember { mutableStateOf<String?>(null) }
+
+    // Launcher for exporting Excel CSV stock template
+    val exportStockTemplateLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportStockTemplate(context, uri) { success, msg ->
+                adminToastMessage = msg
+            }
+        }
+    }
+
+    // Launcher for importing Excel CSV stock
+    val importStockCsvLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importStockFromCsv(context, uri) { success, msg ->
+                adminToastMessage = msg
+            }
+        }
+    }
+
+    // Launcher for exporting full JSON backup file
+    val exportBackupFileLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportCompleteBackup(context, uri) { success, msg ->
+                adminToastMessage = msg
+            }
+        }
+    }
+
+    // Launcher for importing full JSON backup file
+    val importBackupFileLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importCompleteBackup(context, uri) { success, msg ->
+                adminToastMessage = msg
+            }
+        }
+    }
+
     // Form inputs
     var prodId by remember { mutableStateOf("") }
     var prodName by remember { mutableStateOf("") }
@@ -2779,6 +2827,13 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
     var roleCanWrite by remember { mutableStateOf(true) }
     var roleCanDelete by remember { mutableStateOf(false) }
     var roleCanEdit by remember { mutableStateOf(false) }
+
+    var roleEmailInput by remember { mutableStateOf("") }
+    var rolePhoneInput by remember { mutableStateOf("") }
+    var rolePasswordInput by remember { mutableStateOf("") }
+    var rolePasswordVisible by remember { mutableStateOf(false) }
+    var roleTypeInput by remember { mutableStateOf("admin") } // "admin" or "delivery"
+    var selectedAllowedPanels by remember { mutableStateOf(setOf(1, 2, 3, 5, 6, 14, 15, 16)) }
 
     var configTitle by remember { mutableStateOf("") }
     var configBanner by remember { mutableStateOf("") }
@@ -2920,6 +2975,10 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
             Text("قائمة إدارة النظام (21 قسماً متكاملاً):", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
 
+            val currentProfile by viewModel.currentProfile.collectAsStateWithLifecycle()
+            val allowedPanelsString = currentProfile?.allowedPanels ?: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21"
+            val allowedPanelIds = allowedPanelsString.split(",").mapNotNull { it.trim().toIntOrNull() }
+
             val panelItems = listOf(
                 Triple(1, "لوحة التحكم Dashboard", Icons.Default.SupervisorAccount),
                 Triple(2, "إدارة المنتجات", Icons.Default.Inventory2),
@@ -2942,7 +3001,7 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                 Triple(19, "النسخ الاحتياطي والاستعادة", Icons.Default.CloudSync),
                 Triple(20, "إعدادات الدفع والشحن", Icons.Default.CheckCircle),
                 Triple(21, "الربط والتكامل المحاسبي", Icons.Default.AccountBalance)
-            )
+            ).filter { allowedPanelIds.contains(it.first) }
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -3431,6 +3490,45 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                         Column(modifier = Modifier.fillMaxSize()) {
                             Text("تحديث مستويات مخزون السلع فورياً وبسهولة:", color = TextGray, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(8.dp))
+                            
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = TealDark),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                                border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.3f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("الربط والتحكم الذكي بالمستندات (Excel):", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("تصدير قائمة السلع الحالية كقالب إكسل لتحديثه يدوياً، أو استيراد كشف Excel/CSV محدّث لمزامنة كميات المخزون فورياً.", color = Color.White, fontSize = 9.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { exportStockTemplateLauncher.launch("ahmadi_inventory_template.csv") },
+                                            colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = TealDark),
+                                            modifier = Modifier.weight(1f).height(36.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("تصدير قالب كشف (Excel)", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Button(
+                                            onClick = { importStockCsvLauncher.launch("text/*") },
+                                            colors = ButtonDefaults.buttonColors(containerColor = TealLight, contentColor = Color.White),
+                                            modifier = Modifier.weight(1f).height(36.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("استيراد كشف Excel", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 items(products) { item ->
                                     val isLowStock = item.stockQuantity <= 5
@@ -3741,7 +3839,7 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                     }
                     9 -> { // 9) Shipping & Zones
                         Column(modifier = Modifier.fillMaxSize()) {
-                            Text("تعديل مناطق الشحن وأسعار التوصيل في مدن المملكة:", color = TextGray, fontSize = 11.sp)
+                            Text("تعديل مناطق الشحن وأسعار التوصيل في المحافظات اليمنية:", color = TextGray, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 items(shippingZones) { zone ->
@@ -4020,48 +4118,183 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                         }
                     }
                     15 -> { // 15) Permissions & Roles
-                        Column(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                             Card(colors = CardDefaults.cardColors(containerColor = TealMedium), modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text("تعيين عضو جديد بفريق العمل وصلاحياته", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    OutlinedTextField(value = roleNameInput, onValueChange = { roleNameInput = it }, label = { Text("اسم الموظف") }, modifier = Modifier.fillMaxWidth())
-                                    OutlinedTextField(value = roleTitleInput, onValueChange = { roleTitleInput = it }, label = { Text("الدور الوظيفي (مثال: Supervisor)") }, modifier = Modifier.fillMaxWidth())
+                                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("إنشاء حساب موظف/مندوب وتخصيص صلاحياته 🛡️", color = GoldAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    Text("سيتم تسجيل الحساب مباشرة في نظام المصادقة Supabase وحفظ الصلاحيات المخصصة له.", color = TextGray, fontSize = 10.sp)
                                     
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        Checkbox(checked = roleCanWrite, onCheckedChange = { roleCanWrite = it })
-                                        Text("تعديل وإضافة منتجات", color = Color.White, fontSize = 11.sp)
+                                    OutlinedTextField(
+                                        value = roleNameInput, 
+                                        onValueChange = { roleNameInput = it }, 
+                                        label = { Text("الاسم الكامل للموظف") }, 
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = appTextFieldColors()
+                                    )
+                                    OutlinedTextField(
+                                        value = roleEmailInput, 
+                                        onValueChange = { roleEmailInput = it }, 
+                                        label = { Text("البريد الإلكتروني للعمل (اسم المستخدم)") }, 
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = appTextFieldColors()
+                                    )
+                                    OutlinedTextField(
+                                        value = rolePhoneInput, 
+                                        onValueChange = { rolePhoneInput = it }, 
+                                        label = { Text("رقم الهاتف (اختياري)") }, 
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = appTextFieldColors()
+                                    )
+                                    OutlinedTextField(
+                                        value = rolePasswordInput, 
+                                        onValueChange = { rolePasswordInput = it }, 
+                                        label = { Text("كلمة المرور الافتراضية للولوج") }, 
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = appTextFieldColors(),
+                                        visualTransformation = if (rolePasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                        trailingIcon = {
+                                            val icon = if (rolePasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                            IconButton(onClick = { rolePasswordVisible = !rolePasswordVisible }) {
+                                                Icon(imageVector = icon, contentDescription = if (rolePasswordVisible) "إخفاء" else "إظهار", tint = GoldAccent)
+                                            }
+                                        }
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("الدور الأساسي والوظيفة الرئيسية:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { roleTypeInput = "admin" }) {
+                                            RadioButton(selected = roleTypeInput == "admin", onClick = { roleTypeInput = "admin" }, colors = RadioButtonDefaults.colors(selectedColor = GoldAccent))
+                                            Text("مدير فرعي / موظف نظام", color = Color.White, fontSize = 11.sp)
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { roleTypeInput = "delivery" }) {
+                                            RadioButton(selected = roleTypeInput == "delivery", onClick = { roleTypeInput = "delivery" }, colors = RadioButtonDefaults.colors(selectedColor = GoldAccent))
+                                            Text("مندوب توصيل", color = Color.White, fontSize = 11.sp)
+                                        }
                                     }
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        Checkbox(checked = roleCanDelete, onCheckedChange = { roleCanDelete = it })
-                                        Text("حذف طلبات عملاء", color = Color.White, fontSize = 11.sp)
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        Checkbox(checked = roleCanEdit, onCheckedChange = { roleCanEdit = it })
-                                        Text("تعديل الإعدادات العامة", color = Color.White, fontSize = 11.sp)
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("صلاحيات ظهور لوحة التحكم (التحكم بالـ 21 قسماً):", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    
+                                    val allDashboardPanels = listOf(
+                                        1 to "لوحة التحكم الرئيسية 📊",
+                                        2 to "إدارة المنتجات بالمتجر 📱",
+                                        3 to "إدارة الأقسام والتصنيفات 📁",
+                                        4 to "إدارة العلامات التجارية 🏷️",
+                                        5 to "إدارة ومستويات المخزون 📦",
+                                        6 to "إدارة فواتير وطلبات الزبائن 📋",
+                                        7 to "إدارة قاعدة بيانات العملاء 👥",
+                                        8 to "إدارة مناديب التوصيل 🚴",
+                                        9 to "الشحن ومناطق التوصيل 🚚",
+                                        10 to "العروض وكوبونات الخصم 🎫",
+                                        11 to "البانرات والبانيلات الدعائية 🖼️",
+                                        12 to "التقييمات والشكاوى ⭐",
+                                        13 to "المحتوى والصفحات الثابتة 📄",
+                                        14 to "إرسال الإشعارات الجماعية 📢",
+                                        15 to "إدارة الصلاحيات وأدوار الفريق 🔑",
+                                        16 to "إعدادات المتجر العامة ⚙️",
+                                        17 to "التقارير والمبيعات المالية 📈",
+                                        18 to "سجل التدقيق والرقابة Audit Log 📝",
+                                        19 to "النسخ الاحتياطي للبيانات 💾",
+                                        20 to "إعدادات الدفع والضرائب 💳",
+                                        21 to "الربط والتكامل المحاسبي 🏦"
+                                    )
+
+                                    allDashboardPanels.forEach { (id, title) ->
+                                        val isChecked = selectedAllowedPanels.contains(id)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedAllowedPanels = if (isChecked) {
+                                                        selectedAllowedPanels - id
+                                                    } else {
+                                                        selectedAllowedPanels + id
+                                                    }
+                                                }
+                                                .padding(vertical = 2.dp)
+                                        ) {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = {
+                                                    selectedAllowedPanels = if (isChecked) {
+                                                        selectedAllowedPanels - id
+                                                    } else {
+                                                        selectedAllowedPanels + id
+                                                    }
+                                                },
+                                                colors = CheckboxDefaults.colors(checkedColor = GoldAccent, checkmarkColor = TealDark)
+                                            )
+                                            Text(title, color = Color.White, fontSize = 11.sp)
+                                        }
                                     }
                                     
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    var registerStatusMsg by remember { mutableStateOf<String?>(null) }
+                                    var isRegisteringTeam by remember { mutableStateOf(false) }
+
                                     Button(
                                         onClick = {
-                                            viewModel.addTeamMember(roleNameInput, roleTitleInput, roleCanWrite, roleCanDelete, roleCanEdit)
-                                            roleNameInput = ""
+                                            if (roleNameInput.isEmpty() || roleEmailInput.isEmpty() || rolePasswordInput.isEmpty()) {
+                                                registerStatusMsg = "الرجاء ملء الاسم، البريد الإلكتروني، وكلمة المرور!"
+                                                return@Button
+                                            }
+                                            isRegisteringTeam = true
+                                            registerStatusMsg = "جاري إنشاء الحساب والمزامنة السحابية..."
+                                            val allowedPanelsString = selectedAllowedPanels.joinToString(",")
+                                            viewModel.addTeamMemberSupabase(
+                                                name = roleNameInput,
+                                                email = roleEmailInput,
+                                                phone = rolePhoneInput,
+                                                pass = rolePasswordInput,
+                                                role = roleTypeInput,
+                                                allowedPanels = allowedPanelsString
+                                            ) { success, msg ->
+                                                isRegisteringTeam = false
+                                                registerStatusMsg = msg
+                                                if (success) {
+                                                    roleNameInput = ""
+                                                    roleEmailInput = ""
+                                                    rolePhoneInput = ""
+                                                    rolePasswordInput = ""
+                                                }
+                                            }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = TealDark),
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text("تسجيل عضو الفريق بالصلاحيات 🔑", fontSize = 11.sp) }
+                                    ) { 
+                                        Text(if (isRegisteringTeam) "جاري الحفظ والمزامنة..." else "تسجيل حساب الموظف وتثبيت الصلاحيات 🔑", fontSize = 11.sp, fontWeight = FontWeight.Bold) 
+                                    }
+
+                                    if (registerStatusMsg != null) {
+                                        Text(
+                                            text = registerStatusMsg ?: "",
+                                            color = if (registerStatusMsg!!.contains("بنجاح") || registerStatusMsg!!.contains("محاكاة")) GoldAccentLight else AlertError,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text("أعضاء الفريق ومستويات الصلاحيات الحالية:", color = TextGray, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text("أعضاء الفريق ومستويات الصلاحيات الحالية ومقاييس الوصول:", color = TextGray, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(6.dp))
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LazyColumn(modifier = Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 items(teamRoles) { team ->
                                     Card(colors = CardDefaults.cardColors(containerColor = TealMedium)) {
                                         Column(modifier = Modifier.padding(10.dp)) {
-                                            Text(team.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                            Text("الدور: ${team.role}", color = GoldAccent, fontSize = 10.sp)
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                Text(team.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                Text("نشط 🟢", color = GoldAccentLight, fontSize = 9.sp)
+                                            }
+                                            Text("دور النظام: ${team.role}", color = GoldAccent, fontSize = 10.sp)
                                             Text(
-                                                "إضافة منتجات: ${if (team.canWriteProduct) "✅" else "❌"} | حذف طلبات: ${if (team.canDeleteOrder) "✅" else "❌"} | تعديل إعدادات: ${if (team.canEditSettings) "✅" else "❌"}",
+                                                "الصلاحيات الأساسية للمتجر -> كتابة المنتجات: ${if (team.canWriteProduct) "✅" else "❌"} | حذف الطلبيات: ${if (team.canDeleteOrder) "✅" else "❌"} | إدارة الإعدادات: ${if (team.canEditSettings) "✅" else "❌"}",
                                                 color = TextGray,
                                                 fontSize = 9.sp
                                             )
@@ -4305,62 +4538,66 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                     19 -> { // 19) Backup & Restore
                         var backupStatus by remember { mutableStateOf("") }
                         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                            Text("النسخ الاحتياطي وإعادة ضبط مصنع البيانات بالكامل:", color = TextGray, fontSize = 11.sp)
+                            Text("النسخ الاحتياطي الذكي وإعادة ضبط مصنع البيانات بالكامل:", color = TextGray, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(10.dp))
+
+                            // Custom alert/toast inside panel if any
+                            if (adminToastMessage != null) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                                    colors = CardDefaults.cardColors(containerColor = GoldAccent),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(adminToastMessage!!, color = TealDark, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                        TextButton(onClick = { adminToastMessage = null }) {
+                                            Text("حسناً", color = TealDark, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                            }
                             
                             Card(colors = CardDefaults.cardColors(containerColor = TealMedium)) {
                                 Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
-                                    Text("حفظ نسخة احتياطية مشفرة", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("تصدير نسخة احتياطية متكاملة لملف خارجي", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    Text("سيقوم النظام بتجميع كافة محتويات قاعدة البيانات ومستويات المخزون وعرضها كملف JSON لنسخه بأمان خارج التطبيق.", color = Color.White, fontSize = 10.sp)
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("سيقوم النظام بجمع كافة الفئات، والمنتجات، والطلبات، والعملاء، والمناديب، وسجلات التدقيق بالكامل وتشفيرها في ملف (.json) جاهز للتصدير والحفظ في جهازك أو سحابتك الشخصية بأمان.", color = Color.White, fontSize = 10.sp)
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     Button(
                                         onClick = {
-                                            viewModel.triggerBackup { data ->
-                                                backupText = data
-                                                backupStatus = "✅ تم إنشاء النسخة الاحتياطية المشفرة بنجاح!"
-                                            }
+                                            exportBackupFileLauncher.launch("ahmadi_store_backup_${System.currentTimeMillis()}.json")
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = TealDark),
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text("إنشاء نسخة احتياطية فورا 💾", fontSize = 11.sp) }
-                                    
-                                    if (backupText.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        OutlinedTextField(
-                                            value = backupText,
-                                            onValueChange = {},
-                                            readOnly = true,
-                                            label = { Text("بيانات النسخة الاحتياطية (انسخها واحفظها)") },
-                                            modifier = Modifier.fillMaxWidth().height(80.dp),
-                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp)
-                                        )
-                                        Text(backupStatus, color = AlertSuccess, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    ) {
+                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("حفظ وتصدير ملف النسخة الاحتياطية 💾", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                             Card(colors = CardDefaults.cardColors(containerColor = TealMedium)) {
                                 Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
-                                    Text("استيراد واستعادة نقطة نسخة سابقة", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("استيراد واستعادة البيانات بالكامل من ملف", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    OutlinedTextField(
-                                        value = restoreText,
-                                        onValueChange = { restoreText = it },
-                                        label = { Text("الصق بيانات النسخة الاحتياطية هنا") },
-                                        modifier = Modifier.fillMaxWidth().height(80.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("قم باختيار ملف النسخة الاحتياطية (.json) الذي قمت بتصديره سابقاً، وسيقوم النظام فوراً بمسح البيانات الحالية واستعادة محتويات الملف بالكامل مع الحفاظ على التوافق وسجل المبيعات والعمليات.", color = Color.White, fontSize = 10.sp)
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     Button(
                                         onClick = {
-                                            viewModel.triggerRestore {
-                                                restoreText = ""
-                                                backupStatus = "✅ تم استعادة كافة البيانات وحفظها بنجاح!"
-                                            }
+                                            importBackupFileLauncher.launch("*/*")
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = TealLight),
+                                        colors = ButtonDefaults.buttonColors(containerColor = TealLight, contentColor = Color.White),
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text("استعادة البيانات فورا 🔄", fontSize = 11.sp) }
+                                    ) {
+                                        Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("اختر ملف واسترجع البيانات الآن 🔄", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
@@ -4371,12 +4608,12 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                                 Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
                                     Text("إعادة ضبط المصنع بالكامل للبيانات", color = AlertError, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    Text("تنبيه حساس للغاية: هذا الإجراء سيقوم بحذف ومسح كافة فواتير العملاء وسجلات المبيعات وإعادة تهيئة قاعدة البيانات للحالة الافتراضية الأولى.", color = Color.White, fontSize = 10.sp)
+                                    Text("تنبيه حساس للغاية: هذا الإجراء سيقوم بحذف ومسح كافة فواتير العملاء وسجلات المبيعات وإعادة تهيئة قاعدة البيانات للحالة الافتراضية الأولى لمركز الأحمدي للجوالات.", color = Color.White, fontSize = 10.sp)
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Button(
                                         onClick = {
                                             viewModel.triggerResetDatabase {
-                                                backupStatus = "🗑️ تم إعادة تهيئة المتجر كاملاً لضبط المصنع الأصلي!"
+                                                adminToastMessage = "🗑️ تم إعادة تهيئة المتجر كاملاً لضبط المصنع الأصلي بنجاح!"
                                             }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = AlertError, contentColor = Color.White),
@@ -4855,6 +5092,7 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
     // 1) Sales Invoice Dialog (فاتورة المبيعات)
     if (invoiceToShow != null) {
         val order = invoiceToShow!!
+        val orderItems by viewModel.getOrderItems(order.id).collectAsStateWithLifecycle(initialValue = emptyList())
         AlertDialog(
             onDismissRequest = { invoiceToShow = null },
             title = { Text("فاتورة مبيعات رقم #${order.id} 🖨️", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 14.sp) },
@@ -4871,7 +5109,6 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
                     HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
                     
                     Text("تفاصيل الطلب والكميات:", color = GoldAccentLight, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    val orderItems by viewModel.getOrderItems(order.id).collectAsStateWithLifecycle(initialValue = emptyList())
                     if (orderItems.isEmpty()) {
                         Text("جاري تحميل تفاصيل السلع...", color = Color.White, fontSize = 11.sp)
                     } else {
@@ -4889,7 +5126,10 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
             },
             confirmButton = {
                 Button(
-                    onClick = { invoiceToShow = null },
+                    onClick = {
+                        viewModel.printOrderInvoice(context, order, orderItems)
+                        invoiceToShow = null
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = TealDark)
                 ) {
                     Text("تحميل / طباعة الفاتورة 📥", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -4942,7 +5182,10 @@ fun AdminDashboardScreen(viewModel: StoreViewModel) {
             },
             confirmButton = {
                 Button(
-                    onClick = { labelToShow = null },
+                    onClick = {
+                        viewModel.printShippingLabel(context, order)
+                        labelToShow = null
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = TealDark)
                 ) {
                     Text("طباعة الملصق 🏷️", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -6732,9 +6975,15 @@ fun CustomerBottomNavigation(currentScreen: Screen, onNavigate: (Screen) -> Unit
 fun LoginScreen(viewModel: StoreViewModel, role: AppRole) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     val error by viewModel.loginError.collectAsStateWithLifecycle()
     val darkTheme = isAppDarkTheme()
     val logoUri by viewModel.appStoreLogoUri.collectAsStateWithLifecycle()
+
+    var showResetDialog by remember { mutableStateOf(false) }
+    var resetEmail by remember { mutableStateOf("") }
+    var resetDialogMessage by remember { mutableStateOf<String?>(null) }
+    var isResetLoading by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -6789,7 +7038,7 @@ fun LoginScreen(viewModel: StoreViewModel, role: AppRole) {
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val labelText = if (role == AppRole.CUSTOMER) "رقم الهاتف أو الاسم" else "اسم المستخدم"
+                    val labelText = if (role == AppRole.CUSTOMER) "رقم الهاتف أو البريد الإلكتروني" else if (role == AppRole.ADMIN) "البريد الإلكتروني للإدارة" else "البريد الإلكتروني للمندوب"
                     OutlinedTextField(
                         value = username,
                         onValueChange = { username = it },
@@ -6805,11 +7054,35 @@ fun LoginScreen(viewModel: StoreViewModel, role: AppRole) {
                         value = password,
                         onValueChange = { password = it },
                         label = { Text("كلمة المرور") },
-                        visualTransformation = PasswordVisualTransformation(),
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            val icon = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                            val description = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور"
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(imageVector = icon, contentDescription = description, tint = if (darkTheme) GoldAccent else TealMedium)
+                            }
+                        },
                         colors = appTextFieldColors(),
                         modifier = Modifier.fillMaxWidth().testTag("password_input"),
                         shape = RoundedCornerShape(12.dp)
                     )
+
+                    // Forgot Password link
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+                        Text(
+                            text = "نسيت كلمة المرور؟",
+                            color = if (darkTheme) GoldAccent else TealMedium,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .clickable { 
+                                    resetEmail = username.filter { it != ' ' }
+                                    showResetDialog = true 
+                                }
+                                .padding(vertical = 4.dp, horizontal = 2.dp)
+                        )
+                    }
 
                     if (error != null) {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -6858,8 +7131,136 @@ fun LoginScreen(viewModel: StoreViewModel, role: AppRole) {
                                 .clickable { viewModel.navigateTo(Screen.Register) }
                                 .padding(8.dp)
                         )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Social logins divider
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            HorizontalDivider(modifier = Modifier.weight(1f), color = appCardBorderColor())
+                            Text(
+                                text = " أو تسجيل الدخول السريع عبر ",
+                                color = appSubTextColor(),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            HorizontalDivider(modifier = Modifier.weight(1f), color = appCardBorderColor())
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Social Buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Google Login Button
+                            OutlinedButton(
+                                onClick = {
+                                    // Simulated Google Login
+                                    viewModel.login(AppRole.CUSTOMER, "عميل غوغل", "google_oauth_bypass") {
+                                        viewModel.navigateTo(Screen.CustomerHome)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, appCardBorderColor()),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = appTextColor())
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("💬 Google", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // Apple Login Button
+                            OutlinedButton(
+                                onClick = {
+                                    // Simulated Apple Login
+                                    viewModel.login(AppRole.CUSTOMER, "عميل آبل", "apple_oauth_bypass") {
+                                        viewModel.navigateTo(Screen.CustomerHome)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, appCardBorderColor()),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = appTextColor())
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("🍏 Apple ID", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
+            }
+
+            // Password Reset Material 3 Dialog
+            if (showResetDialog) {
+                AlertDialog(
+                    onDismissRequest = { 
+                        showResetDialog = false
+                        resetDialogMessage = null
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (resetEmail.trim().isEmpty()) {
+                                    resetDialogMessage = "الرجاء إدخال البريد الإلكتروني"
+                                    return@Button
+                                }
+                                isResetLoading = true
+                                viewModel.resetPassword(resetEmail) { success, msg ->
+                                    isResetLoading = false
+                                    resetDialogMessage = msg
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = TealDark)
+                        ) {
+                            Text("إرسال الرابط 📧", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { 
+                            showResetDialog = false
+                            resetDialogMessage = null
+                        }) {
+                            Text("إلغاء", color = Color.White)
+                        }
+                    },
+                    title = {
+                        Text("استعادة كلمة المرور 🔐", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = GoldAccent)
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("أدخل بريدك الإلكتروني المسجل وسنقوم بإرسال رابط إعادة تعيين كلمة المرور إليك فوراً.", color = Color.White, fontSize = 11.sp)
+                            OutlinedTextField(
+                                value = resetEmail,
+                                onValueChange = { resetEmail = it },
+                                label = { Text("البريد الإلكتروني") },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = appTextFieldColors()
+                            )
+                            if (resetDialogMessage != null) {
+                                Text(
+                                    text = resetDialogMessage ?: "",
+                                    color = if (resetDialogMessage!!.contains("نجاح") || resetDialogMessage!!.contains("محاكاة")) GoldAccentLight else AlertError,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    },
+                    containerColor = TealDark,
+                    shape = RoundedCornerShape(16.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -6885,6 +7286,8 @@ fun RegisterScreen(viewModel: StoreViewModel) {
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
     val error by viewModel.registerError.collectAsStateWithLifecycle()
     val darkTheme = isAppDarkTheme()
 
@@ -6956,7 +7359,14 @@ fun RegisterScreen(viewModel: StoreViewModel) {
                         value = password,
                         onValueChange = { password = it },
                         label = { Text("كلمة المرور") },
-                        visualTransformation = PasswordVisualTransformation(),
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            val icon = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                            val description = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور"
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(imageVector = icon, contentDescription = description, tint = if (darkTheme) GoldAccent else TealMedium)
+                            }
+                        },
                         colors = appTextFieldColors(),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -6968,7 +7378,14 @@ fun RegisterScreen(viewModel: StoreViewModel) {
                         value = confirmPassword,
                         onValueChange = { confirmPassword = it },
                         label = { Text("تأكيد كلمة المرور") },
-                        visualTransformation = PasswordVisualTransformation(),
+                        visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            val icon = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                            val description = if (confirmPasswordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور"
+                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                Icon(imageVector = icon, contentDescription = description, tint = if (darkTheme) GoldAccent else TealMedium)
+                            }
+                        },
                         colors = appTextFieldColors(),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -7575,16 +7992,28 @@ fun SettingsScreen(viewModel: StoreViewModel) {
                             val name = viewModel.customerName.collectAsStateWithLifecycle().value
                             if (name.isEmpty()) "عميل الأحمدي" else name
                         }
-                        AppRole.ADMIN -> "مدير النظام (مطور)"
-                        AppRole.DELIVERY -> "مندوب التوصيل"
+                        AppRole.ADMIN -> {
+                            val profile = viewModel.currentProfile.collectAsStateWithLifecycle().value
+                            profile?.name ?: "مدير مركز الأحمدي"
+                        }
+                        AppRole.DELIVERY -> {
+                            val profile = viewModel.currentProfile.collectAsStateWithLifecycle().value
+                            profile?.name ?: "مندوب التوصيل"
+                        }
                     }
                     val displaySub = when (role) {
                         AppRole.CUSTOMER -> {
                             val phone = viewModel.customerPhone.collectAsStateWithLifecycle().value
                             if (phone.isEmpty()) "حساب محلي تجريبي" else phone
                         }
-                        AppRole.ADMIN -> "اسم المستخدم: mana"
-                        AppRole.DELIVERY -> "اسم المستخدم: mamm"
+                        AppRole.ADMIN -> {
+                            val profile = viewModel.currentProfile.collectAsStateWithLifecycle().value
+                            if (!profile?.phone.isNullOrBlank()) profile?.phone!! else "ahmadicenterstore@gmail.com"
+                        }
+                        AppRole.DELIVERY -> {
+                            val profile = viewModel.currentProfile.collectAsStateWithLifecycle().value
+                            if (!profile?.phone.isNullOrBlank()) profile?.phone!! else "delivery@alahmadi.com"
+                        }
                     }
 
                     Text(

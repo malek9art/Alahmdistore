@@ -82,6 +82,9 @@ interface StoreDao {
     @Query("SELECT * FROM order_items WHERE orderId = :orderId")
     fun getOrderItems(orderId: Int): Flow<List<OrderItem>>
 
+    @Query("SELECT * FROM order_items")
+    suspend fun getAllOrderItems(): List<OrderItem>
+
     // Notifications
     @Query("SELECT * FROM notifications ORDER BY timestamp DESC")
     fun getAllNotifications(): Flow<List<Notification>>
@@ -108,6 +111,31 @@ interface StoreDao {
 
     @Query("DELETE FROM favorites WHERE productId = :prodId")
     suspend fun removeFavorite(prodId: Int)
+
+    // Clear Queries for full restore
+    @Query("DELETE FROM categories")
+    suspend fun clearCategories()
+
+    @Query("DELETE FROM products")
+    suspend fun clearProducts()
+
+    @Query("DELETE FROM orders")
+    suspend fun clearOrders()
+
+    @Query("DELETE FROM order_items")
+    suspend fun clearOrderItems()
+
+    @Query("DELETE FROM notifications")
+    suspend fun clearNotifications()
+
+    @Query("DELETE FROM audit_logs")
+    suspend fun clearAuditLogs()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAuditLogs(logs: List<AuditLog>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNotifications(notifications: List<Notification>)
 }
 
 @Database(
